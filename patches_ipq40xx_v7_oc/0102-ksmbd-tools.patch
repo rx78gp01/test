@@ -1,0 +1,36 @@
+From 9cf0eae9bca7447354bcb96759f213ae407c9532 Mon Sep 17 00:00:00 2001
+From: Andrea Pesaresi <andreapesaresi82@gmail.com>
+Date: Sat, 6 Apr 2024 14:18:32 +0200
+Subject: [PATCH] ksmbd-tools: update to version 3.5.2
+
+Major changes are:
+ - Add durable handles parameter to ksmbd.conf.
+ - Add payload_sz in ksmbd_share_config_response to validate ipc
+   response.
+ - Fix UAF and cleanups.
+
+Signed-off-by: Andrea Pesaresi <andreapesaresi82@gmail.com>
+---
+ net/ksmbd-tools/Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/feeds/packages/net/ksmbd-tools/Makefile b/feeds/packages/net/ksmbd-tools/Makefile
+index a0f939dbe0889..4c1b85663b8c2 100644
+--- a/feeds/packages/net/ksmbd-tools/Makefile
++++ b/feeds/packages/net/ksmbd-tools/Makefile
+@@ -1,12 +1,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=ksmbd-tools
+-PKG_VERSION:=3.5.1
+-PKG_RELEASE:=2
++PKG_VERSION:=3.5.2
++PKG_RELEASE:=1
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://github.com/cifsd-team/ksmbd-tools/releases/download/$(PKG_VERSION)
+-PKG_HASH:=ab377b3044c48382303f3f7ec95f2e1a17592c774d70b2a11f32952099dbb214
++PKG_HASH:=5da7fb4cb4368f9abf56f6f9fbc17b25e387876bed9ff7ee0d6f1140ef07c8d7
+ 
+ PKG_LICENSE:=GPL-2.0-or-later
+ PKG_LICENSE_FILES:=COPYING

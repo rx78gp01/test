@@ -1,0 +1,43 @@
+From a90d387e8631af9132c4741832b016e88341d300 Mon Sep 17 00:00:00 2001
+From: Philip Prindeville <philipp@redfish-solutions.com>
+Date: Sun, 24 Mar 2024 18:20:59 -0600
+Subject: [PATCH] strongswan: Update to 5.9.14
+
+Signed-off-by: Philip Prindeville <philipp@redfish-solutions.com>
+---
+ net/strongswan/Makefile                                     | 6 +++---
+ ...pdh-Plugin-that-implements-gmp-DH-functions-in-an-.patch | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/feeds/packages/net/strongswan/Makefile b/feeds/packages/net/strongswan/Makefile
+index 7b67939399b12..b74095981045d 100644
+--- a/feeds/packages/net/strongswan/Makefile
++++ b/feeds/packages/net/strongswan/Makefile
+@@ -8,12 +8,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=strongswan
+-PKG_VERSION:=5.9.12
++PKG_VERSION:=5.9.14
+ PKG_RELEASE:=1
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+ PKG_SOURCE_URL:=https://download.strongswan.org/ https://download2.strongswan.org/
+-PKG_HASH:=5e6018b07cbe9f72c044c129955a13be3e2f799ceb53f53a4459da6a922b95e5
++PKG_HASH:=728027ddda4cb34c67c4cec97d3ddb8c274edfbabdaeecf7e74693b54fc33678
+ PKG_LICENSE:=GPL-2.0-or-later
+ PKG_MAINTAINER:=Philip Prindeville <philipp@redfish-solutions.com>, Noel Kuntze <noel.kuntze@thermi.consulting>
+ PKG_CPE_ID:=cpe:/a:strongswan:strongswan
+diff --git a/feeds/packages/net/strongswan/patches/0904-gmpdh-Plugin-that-implements-gmp-DH-functions-in-an-.patch b/feeds/packages/net/strongswan/patches/0904-gmpdh-Plugin-that-implements-gmp-DH-functions-in-an-.patch
+index b81138c564853..8aa72b35093f3 100644
+--- a/feeds/packages/net/strongswan/patches/0904-gmpdh-Plugin-that-implements-gmp-DH-functions-in-an-.patch
++++ b/feeds/packages/net/strongswan/patches/0904-gmpdh-Plugin-that-implements-gmp-DH-functions-in-an-.patch
+@@ -42,7 +42,7 @@ Subject: [PATCH 904/904] gmpdh: Plugin that implements gmp DH functions in an
+  AM_CONDITIONAL(USE_CURVE25519, test x$curve25519 = xtrue)
+  AM_CONDITIONAL(USE_RDRAND, test x$rdrand = xtrue)
+  AM_CONDITIONAL(USE_AESNI, test x$aesni = xtrue)
+-@@ -1996,6 +1999,7 @@ AC_CONFIG_FILES([
++@@ -1997,6 +2000,7 @@ AC_CONFIG_FILES([
+  	src/libstrongswan/plugins/mgf1/Makefile
+  	src/libstrongswan/plugins/fips_prf/Makefile
+  	src/libstrongswan/plugins/gmp/Makefile

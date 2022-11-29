@@ -1,0 +1,42 @@
+From e9e1ae23862ceeaa95939b2a7cfa9156c5338f89 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Fri, 12 Jan 2024 19:13:29 -0800
+Subject: [PATCH] ksmbd-tools: update to 3.5.1
+
+Various fixes for ksmbd, most notably a visibility fix for the latest
+ksmbd code.
+
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+---
+ net/ksmbd-tools/Makefile               | 4 ++--
+ net/ksmbd-tools/patches/030-glib.patch | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/feeds/packages/net/ksmbd-tools/Makefile b/feeds/packages/net/ksmbd-tools/Makefile
+index 84e8f3e57dd44..5c914c24cfb9c 100644
+--- a/feeds/packages/net/ksmbd-tools/Makefile
++++ b/feeds/packages/net/ksmbd-tools/Makefile
+@@ -5,8 +5,8 @@ PKG_RELEASE:=1
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL:=https://github.com/cifsd-team/ksmbd-tools
+-PKG_SOURCE_VERSION:=3.4.8
+-PKG_MIRROR_HASH:=e374c6e5053e82bc321e13927dbf3baf0d636205516564324686d002c084c5d6
++PKG_SOURCE_VERSION:=3.5.1
++PKG_MIRROR_HASH:=6e8e56ecdfa0ddfdb3a351b27ae5b9148d4f6695bcee9a7eae39c2a42481ef18
+ 
+ PKG_LICENSE:=GPL-2.0-or-later
+ PKG_LICENSE_FILES:=COPYING
+diff --git a/feeds/packages/net/ksmbd-tools/patches/030-glib.patch b/feeds/packages/net/ksmbd-tools/patches/030-glib.patch
+index 1fb240a958b60..49809e9c60ab9 100644
+--- a/feeds/packages/net/ksmbd-tools/patches/030-glib.patch
++++ b/feeds/packages/net/ksmbd-tools/patches/030-glib.patch
+@@ -3,7 +3,7 @@
+ @@ -21,6 +21,7 @@ include_dirs = include_directories(
+  glib_dep = dependency(
+    'glib-2.0',
+-   version: '>= 2.40',
++   version: '>= 2.44',
+ +  static: true,
+  )
+  libnl_dep = dependency(

@@ -1,0 +1,29 @@
+From a91b79fd04d58e711273d08e0b1246942b2eec98 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Pawe=C5=82=20Owoc?= <frut3k7@gmail.com>
+Date: Mon, 18 Mar 2024 21:53:51 +0100
+Subject: [PATCH] mac80211: add missing config for third 160MHz width for 5GHz
+ radio
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Without this configuration it is not possible to run the radio using HE160 on channels 149-177.
+
+Fixes: #14906
+Signed-off-by: Paweł Owoc <frut3k7@gmail.com>
+---
+ ...package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh    | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh b/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh
+index 55df71ee3d5857..bc59c303b939ac 100755
+--- a/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/netifd/wireless/mac80211.sh
+@@ -273,6 +273,7 @@ mac80211_hostapd_setup_base() {
+ 				case "$channel" in
+ 					36|40|44|48|52|56|60|64) idx=50;;
+ 					100|104|108|112|116|120|124|128) idx=114;;
++					149|153|157|161|165|169|173|177) idx=163;;
+ 				esac
+ 			fi
+ 			enable_ac=1

@@ -1,0 +1,26 @@
+diff --git a/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4029-insect-common.dtsi b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4029-insect-common.dtsi
+index f81e3ef690dcc..522fa12fd977a 100644
+--- a/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4029-insect-common.dtsi
++++ b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4029-insect-common.dtsi
+@@ -133,11 +132,17 @@
+ 		pagesize = <32>;
+ 		reg = <0x50>;
+ 		read-only; /* This holds our MAC & Meraki board-data */
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+ 
+-		mac_address: mac-address@66 {
+-			reg = <0x66 0x6>;
++		nvmem-layout {
++			compatible = "fixed-layout";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			mac_address: mac-address@66 {
++				compatible = "mac-base";
++				reg = <0x66 0x6>;
++				#nvmem-cell-cells = <1>;
++			};
+ 		};
+ 	};
+ };

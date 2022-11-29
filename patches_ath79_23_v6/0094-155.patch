@@ -1,0 +1,66 @@
+diff --git a/include/kernel-5.15 b/include/kernel-5.15
+index 84a0d0a1bffe1..4a82b9c9b3b43 100644
+--- a/include/kernel-5.15
++++ b/include/kernel-5.15
+@@ -1,2 +1,2 @@
+-LINUX_VERSION-5.15 = .154
+-LINUX_KERNEL_HASH-5.15.154 = 17f85ea79ff2bcd2a577be9d8090e70573a671eaf1d35d897e739ce0603d0698
++LINUX_VERSION-5.15 = .155
++LINUX_KERNEL_HASH-5.15.155 = c85859b86d2e6d1fc91ca1be8b44f24a9b5bb9f86869b04a8665a3a6559126e4
+diff --git a/target/linux/generic/backport-5.15/020-v6.1-05-mm-multi-gen-LRU-groundwork.patch b/target/linux/generic/backport-5.15/020-v6.1-05-mm-multi-gen-LRU-groundwork.patch
+index 969d721da6152..85710eb79b8f3 100644
+--- a/target/linux/generic/backport-5.15/020-v6.1-05-mm-multi-gen-LRU-groundwork.patch
++++ b/target/linux/generic/backport-5.15/020-v6.1-05-mm-multi-gen-LRU-groundwork.patch
+@@ -552,7 +552,7 @@ Signed-off-by: Andrew Morton <akpm@linux-foundation.org>
+ --- a/kernel/bounds.c
+ +++ b/kernel/bounds.c
+ @@ -22,6 +22,11 @@ int main(void)
+- 	DEFINE(NR_CPUS_BITS, ilog2(CONFIG_NR_CPUS));
++ 	DEFINE(NR_CPUS_BITS, bits_per(CONFIG_NR_CPUS));
+  #endif
+  	DEFINE(SPINLOCK_SIZE, sizeof(spinlock_t));
+ +#ifdef CONFIG_LRU_GEN
+diff --git a/target/linux/octeontx/patches-5.15/0004-PCI-add-quirk-for-Gateworks-PLX-PEX860x-switch-with-.patch b/target/linux/octeontx/patches-5.15/0004-PCI-add-quirk-for-Gateworks-PLX-PEX860x-switch-with-.patch
+index e09ccce0f89da..12910b74e4740 100644
+--- a/target/linux/octeontx/patches-5.15/0004-PCI-add-quirk-for-Gateworks-PLX-PEX860x-switch-with-.patch
++++ b/target/linux/octeontx/patches-5.15/0004-PCI-add-quirk-for-Gateworks-PLX-PEX860x-switch-with-.patch
+@@ -14,7 +14,7 @@ Signed-off-by: Tim Harvey <tharvey@gateworks.com>
+ 
+ --- a/drivers/pci/quirks.c
+ +++ b/drivers/pci/quirks.c
+-@@ -25,6 +25,7 @@
++@@ -26,6 +26,7 @@
+  #include <linux/ktime.h>
+  #include <linux/mm.h>
+  #include <linux/nvme.h>
+@@ -22,10 +22,10 @@ Signed-off-by: Tim Harvey <tharvey@gateworks.com>
+  #include <linux/platform_data/x86/apple.h>
+  #include <linux/pm_runtime.h>
+  #include <linux/suspend.h>
+-@@ -5899,3 +5900,34 @@ static void nvidia_ion_ahci_fixup(struct
+- 	pdev->dev_flags |= PCI_DEV_FLAGS_HAS_MSI_MASKING;
+- }
+- DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_NVIDIA, 0x0ab8, nvidia_ion_ahci_fixup);
++@@ -6000,3 +6001,34 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_I
++ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0xa73f, dpc_log_size);
++ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0xa76e, dpc_log_size);
++ #endif
+ +
+ +#ifdef CONFIG_PCI_HOST_THUNDER_PEM
+ +/*
+diff --git a/target/linux/bcm27xx/patches-5.15/950-0008-drm-vc4-hdmi-Use-a-mutex-to-prevent-concurrent-frame.patch b/target/linux/bcm27xx/patches-5.15/950-0008-drm-vc4-hdmi-Use-a-mutex-to-prevent-concurrent-frame.patch
+index 49470cdb472fd..9c43318d6aa3b 100644
+--- a/target/linux/bcm27xx/patches-5.15/950-0008-drm-vc4-hdmi-Use-a-mutex-to-prevent-concurrent-frame.patch
++++ b/target/linux/bcm27xx/patches-5.15/950-0008-drm-vc4-hdmi-Use-a-mutex-to-prevent-concurrent-frame.patch
+@@ -70,9 +70,9 @@ Signed-off-by: Maxime Ripard <maxime@cerno.tech>
+  	edid = drm_get_edid(connector, vc4_hdmi->ddc);
+  	cec_s_phys_addr_from_edid(vc4_hdmi->cec_adap, edid);
+ -	if (!edid)
+--		return -ENODEV;
++-		return 0;
+ +	if (!edid) {
+-+		ret = -ENODEV;
+++		ret = 0;
+ +		goto out;
+ +	}
+  

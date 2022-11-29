@@ -1,0 +1,9 @@
+diff --git a/include/kernel-5.15 b/include/kernel-5.15
+index 5cc07434b2a6c..d93ae194b8aa1 100644
+--- a/include/kernel-5.15
++++ b/include/kernel-5.15
+@@ -1,2 +1,2 @@
+-LINUX_VERSION-5.15 = .150
+-LINUX_KERNEL_HASH-5.15.150 = ee05592b458e7fcdc515b43605883a10cc2f65f2e2b58d60af8a72b93467e4d4
++LINUX_VERSION-5.15 = .151
++LINUX_KERNEL_HASH-5.15.151 = 8a1e760bf2660947234109aa4fdbbe3686238b4e852157b96c59356689107e49

@@ -1,0 +1,230 @@
+diff --git a/package/network/services/dnsmasq/patches/202.patch b/package/network/services/dnsmasq/patches/202.patch
+new file mode 100644
+index 0000000..ae70ca9
+--- /dev/null
++++ b/package/network/services/dnsmasq/patches/202.patch
+@@ -0,0 +1,36 @@
++From 89aad014685161318318737dc0e350ee4dae982d Mon Sep 17 00:00:00 2001
++From: Simon Kelley <simon@thekelleys.org.uk>
++Date: Mon, 19 Feb 2024 23:21:58 +0000
++Subject: [PATCH] Fix infinite loop when invoking SetFilterA dbus method more
++ than once.
++
++Also applies to SetFilterAAAA.
++
++Thanks to Clayton Craft for spotting the issue.
++---
++ src/dbus.c | 2 ++
++ 1 file changed, 2 insertions(+)
++
++diff --git a/src/dbus.c b/src/dbus.c
++index ad6a4f3..84a8d97 100644
++--- a/src/dbus.c
+++++ b/src/dbus.c
++@@ -833,6 +833,7 @@ DBusHandlerResult message_handler(DBusConnection *connection,
++ 
++       if (!done)
++ 	{
+++	  done = 1;
++ 	  list.next = daemon->filter_rr;
++ 	  daemon->filter_rr = &list;
++ 	}
++@@ -844,6 +845,7 @@ DBusHandlerResult message_handler(DBusConnection *connection,
++ 
++       if (!done)
++ 	{
+++	  done = 1;
++ 	  list.next = daemon->filter_rr;
++ 	  daemon->filter_rr = &list;
++ 	}
++-- 
++2.20.1
++
+diff --git a/package/network/services/dnsmasq/patches/203.patch b/package/network/services/dnsmasq/patches/203.patch
+new file mode 100644
+index 0000000..eba61b2
+--- /dev/null
++++ b/package/network/services/dnsmasq/patches/203.patch
+@@ -0,0 +1,133 @@
++From 4c590320ec5442d431c5e059c890077ec6d67575 Mon Sep 17 00:00:00 2001
++From: Simon Kelley <simon@thekelleys.org.uk>
++Date: Tue, 20 Feb 2024 23:38:26 +0000
++Subject: [PATCH] Fix breakage in DBus FilterA and FilterAAAA methods.
++
++In generalising the RR filter code, the Dbus methods
++controlling filtering A and AAAA records
++got severely broken. This, and the previous commit,
++fixes things.
++---
++ src/dbus.c | 67 +++++++++++++++++++++++++++++++++++-------------------
++ src/util.c |  2 +-
++ 2 files changed, 45 insertions(+), 24 deletions(-)
++
++diff --git a/src/dbus.c b/src/dbus.c
++index 84a8d97..87c4b80 100644
++--- a/src/dbus.c
+++++ b/src/dbus.c
++@@ -485,28 +485,37 @@ static DBusMessage* dbus_read_servers_ex(DBusMessage *message, int strings)
++   return error;
++ }
++ 
++-static DBusMessage *dbus_set_bool(DBusMessage *message, int flag, char *name)
+++static DBusMessage *dbus_get_bool(DBusMessage *message, dbus_bool_t *enabled, char *name)
++ {
++   DBusMessageIter iter;
++-  dbus_bool_t enabled;
++ 
++   if (!dbus_message_iter_init(message, &iter) || dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_BOOLEAN)
++     return dbus_message_new_error(message, DBUS_ERROR_INVALID_ARGS, "Expected boolean argument");
++   
++-  dbus_message_iter_get_basic(&iter, &enabled);
++-
++-  if (enabled)
++-    { 
++-      my_syslog(LOG_INFO, _("Enabling --%s option from D-Bus"), name);
++-      set_option_bool(flag);
++-    }
+++  dbus_message_iter_get_basic(&iter, enabled);
+++  
+++  if (*enabled)
+++    my_syslog(LOG_INFO, _("Enabling --%s option from D-Bus"), name);
++   else
+++    my_syslog(LOG_INFO, _("Disabling --%s option from D-Bus"), name);
+++  
+++  return NULL;
+++}
+++
+++static DBusMessage *dbus_set_bool(DBusMessage *message, int flag, char *name)
+++{
+++  dbus_bool_t val;
+++  DBusMessage *reply = dbus_get_bool(message, &val, name);
+++  
+++  if (!reply)
++     {
++-      my_syslog(LOG_INFO, _("Disabling --%s option from D-Bus"), name);
++-      reset_option_bool(flag);
+++      if (val)
+++	set_option_bool(flag);
+++      else
+++	reset_option_bool(flag);
++     }
++ 
++-  return NULL;
+++  return reply;
++ }
++ 
++ #ifdef HAVE_DHCP
++@@ -829,25 +838,37 @@ DBusHandlerResult message_handler(DBusConnection *connection,
++   else if (strcmp(method, "SetFilterA") == 0)
++     {
++       static int done = 0;
++-      static struct rrlist list = { T_A, NULL };
+++      static struct rrlist list = { 0, NULL };
+++      dbus_bool_t enabled;
++ 
++-      if (!done)
+++      if (!(reply = dbus_get_bool(message, &enabled, "filter-A")))
++ 	{
++-	  done = 1;
++-	  list.next = daemon->filter_rr;
++-	  daemon->filter_rr = &list;
+++	  if (!done)
+++	    {
+++	      done = 1;
+++	      list.next = daemon->filter_rr;
+++	      daemon->filter_rr = &list;
+++	    }
+++
+++	  list.rr = enabled ? T_A : 0;
++ 	}
++     }
++   else if (strcmp(method, "SetFilterAAAA") == 0)
++     {
++       static int done = 0;
++-      static struct rrlist list = { T_AAAA, NULL };
++-
++-      if (!done)
+++      static struct rrlist list = { 0, NULL };
+++      dbus_bool_t enabled;
+++      
+++      if (!(reply = dbus_get_bool(message, &enabled, "filter-AAAA")))
++ 	{
++-	  done = 1;
++-	  list.next = daemon->filter_rr;
++-	  daemon->filter_rr = &list;
+++	  if (!done)
+++	    {
+++	      done = 1;
+++	      list.next = daemon->filter_rr;
+++	      daemon->filter_rr = &list;
+++	    }
+++	  
+++	  list.rr = enabled ? T_AAAA : 0;
++ 	}
++     }
++   else if (strcmp(method, "SetLocaliseQueriesOption") == 0)
++diff --git a/src/util.c b/src/util.c
++index 0c7de44..c527381 100644
++--- a/src/util.c
+++++ b/src/util.c
++@@ -119,7 +119,7 @@ int rr_on_list(struct rrlist *list, unsigned short rr)
++ {
++   while (list)
++     {
++-      if (list->rr == rr)
+++      if (list->rr != 0 && list->rr == rr)
++ 	return 1;
++ 
++       list = list->next;
++-- 
++2.20.1
++
+diff --git a/package/network/services/dnsmasq/patches/205.patch b/package/network/services/dnsmasq/patches/205.patch
+new file mode 100644
+index 0000000..5c58ea6
+--- /dev/null
++++ b/package/network/services/dnsmasq/patches/205.patch
+@@ -0,0 +1,40 @@
++From 9adbf009a6df76d9ae5be2b93a90e210e9aa8216 Mon Sep 17 00:00:00 2001
++From: Simon Kelley <simon@thekelleys.org.uk>
++Date: Wed, 21 Feb 2024 00:46:25 +0000
++Subject: [PATCH] The DHCPv4 server doesn't need CAP_NET_ADMIN if always
++ broadcasting.
++MIME-Version: 1.0
++Content-Type: text/plain; charset=utf8
++Content-Transfer-Encoding: 8bit
++
++CAP_NET_ADMIN is needed in the DHCPv4 code to place entries into
++the ARP cache. If it's configured to unconditionally broadcast
++to unconfigured clients, it never touches the ARP cache and
++doesn't need CAP_NET_ADMIN.
++
++Thanks to Martin IviÄiÄ <max.enhanced@gmail.com> for prompting this.
++---
++ src/dnsmasq.c | 5 ++++-
++ 1 file changed, 4 insertions(+), 1 deletion(-)
++
++diff --git a/src/dnsmasq.c b/src/dnsmasq.c
++index 30fb419..a9f26ae 100644
++--- a/src/dnsmasq.c
+++++ b/src/dnsmasq.c
++@@ -313,9 +313,12 @@ int main (int argc, char **argv)
++     {
++       dhcp_init();
++ #   ifdef HAVE_LINUX_NETWORK
+++      /* Need NET_RAW to send ping. */
++       if (!option_bool(OPT_NO_PING))
++ 	need_cap_net_raw = 1;
++-      need_cap_net_admin = 1;
+++      /* Need NET_ADMIN to change ARP cache if not always broadcasting. */
+++      if (daemon->force_broadcast == NULL || daemon->force_broadcast->list != NULL)
+++        need_cap_net_admin = 1;
++ #   endif
++     }
++   
++-- 
++2.20.1
++
+-- 
+2.38.1.windows.1
+

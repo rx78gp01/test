@@ -1,0 +1,54 @@
+From e3bb01b30ea524e0004de6eb66466a514591ef42 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Tue, 5 Mar 2024 19:13:52 +0100
+Subject: [PATCH] mbedtls: enable threading support
+
+Fixes libssh, which requires it. Bump ABI_VERSION, since enabling this
+option affects data structures in mbedtls include files.
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ package/libs/mbedtls/Config.in | 7 +++++++
+ package/libs/mbedtls/Makefile  | 4 +++-
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/package/libs/mbedtls/Config.in b/package/libs/mbedtls/Config.in
+index 9fbe9f8a4a0ff..ad0ecb6e611aa 100644
+--- a/package/libs/mbedtls/Config.in
++++ b/package/libs/mbedtls/Config.in
+@@ -172,6 +172,13 @@ config MBEDTLS_SSL_TRUNCATED_HMAC
+ 	bool "MBEDTLS_SSL_TRUNCATED_HMAC"
+ 	default n
+ 
++config MBEDTLS_THREADING_C
++	bool "MBEDTLS_THREADING_C"
++	default y
++
++config MBEDTLS_THREADING_PTHREAD
++	def_bool MBEDTLS_THREADING_C
++
+ config MBEDTLS_VERSION_C
+ 	bool "MBEDTLS_VERSION_C"
+ 	default n
+diff --git a/package/libs/mbedtls/Makefile b/package/libs/mbedtls/Makefile
+index ad13bbe846371..502bf65ffc450 100644
+--- a/package/libs/mbedtls/Makefile
++++ b/package/libs/mbedtls/Makefile
+@@ -70,6 +70,8 @@ MBEDTLS_BUILD_OPTS= \
+   CONFIG_MBEDTLS_SELF_TEST \
+   CONFIG_MBEDTLS_SSL_RENEGOTIATION \
+   CONFIG_MBEDTLS_SSL_TRUNCATED_HMAC \
++  CONFIG_MBEDTLS_THREADING_C \
++  CONFIG_MBEDTLS_THREADING_PTHREAD \
+   CONFIG_MBEDTLS_VERSION_C \
+   CONFIG_MBEDTLS_VERSION_FEATURES
+ 
+@@ -94,7 +96,7 @@ $(call Package/mbedtls/Default)
+   CATEGORY:=Libraries
+   SUBMENU:=SSL
+   TITLE+= (library)
+-  ABI_VERSION:=12
++  ABI_VERSION:=13
+   MENU:=1
+ endef
+ 

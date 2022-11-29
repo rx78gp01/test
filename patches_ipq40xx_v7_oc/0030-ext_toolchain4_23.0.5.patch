@@ -1,0 +1,111 @@
+From 28420cd67bc4c0fe5974ac0336528aea3a443b98 Mon Sep 17 00:00:00 2001
+From: Christian Marangi <ansuelsmth@gmail.com>
+Date: Thu, 19 Oct 2023 14:19:09 +0200
+Subject: [PATCH] scripts/ext-toolchain: implement external GCC version
+ detection
+
+Some package may needs to enable compatibility option based on the GCC
+version.
+
+Currently the GCC version is set based on the default value and doesn't
+actually reflect the real value provided by the external toolchain if
+used.
+
+Fix this by correctly detecting the GCC version in the external
+toolchain and set the correct value in CONFIG_GCC_VERSION.
+
+A new option is added in menuconfig to manually set the GCC version if
+needed.
+
+Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
+---
+ scripts/ext-toolchain.sh     | 22 ++++++++++++++++++++++
+ toolchain/Config.in          |  8 ++++++++
+ toolchain/gcc/Config.version |  1 +
+ 3 files changed, 31 insertions(+)
+
+diff --git a/scripts/ext-toolchain.sh b/scripts/ext-toolchain.sh
+index fe1024c18ec80..1fa2e952bb792 100755
+--- a/scripts/ext-toolchain.sh
++++ b/scripts/ext-toolchain.sh
+@@ -27,6 +27,7 @@ CFLAGS=""
+ TOOLCHAIN="."
+ 
+ LIBC_TYPE=""
++GCC_VERSION=""
+ 
+ 
+ # Library specs
+@@ -199,6 +200,19 @@ find_bins() {
+ 	return 1
+ }
+ 
++find_gcc_version() {
++	if [ -f $TOOLCHAIN/info.mk ]; then
++		GCC_VERSION=$(grep GCC_VERSION $TOOLCHAIN/info.mk | sed 's/GCC_VERSION=//')
++		return 0
++	fi
++
++	echo "Warning! Can't find info.mk, trying to detect with alternative way."
++
++	# Very fragile detection
++	GCC_VERSION=$(find $TOOLCHAIN/bin | grep -oE "gcc-[0-9]+\.[0-9]+\.[0-9]+$" | \
++		head -1 | sed 's/gcc-//')
++}
++
+ 
+ wrap_bin_cc() {
+ 	local out="$1"
+@@ -383,6 +397,13 @@ print_config() {
+ 		return 1
+ 	fi
+ 
++	if [ -n "$GCC_VERSION" ]; then
++		echo "CONFIG_EXTERNAL_GCC_VERSION=\"$GCC_VERSION\"" >> "$config"
++	else
++		echo "Can't detect GCC version. Aborting!" >&2
++		return 1
++	fi
++
+ 	local lib
+ 	for lib in C RT PTHREAD GCC STDCPP SSP GFORTRAN GOMP; do
+ 		local file
+@@ -564,6 +585,7 @@ while [ -n "$1" ]; do
+ 		--config)
+ 			if probe_cc; then
+ 				probe_libc
++				find_gcc_version
+ 				print_config "$1"
+ 				exit $?
+ 			fi
+diff --git a/toolchain/Config.in b/toolchain/Config.in
+index b0273acafdd7d..24caecccb3ee7 100644
+--- a/toolchain/Config.in
++++ b/toolchain/Config.in
+@@ -150,6 +150,14 @@ menuconfig EXTERNAL_TOOLCHAIN
+ 
+ 	endchoice
+ 
++	config EXTERNAL_GCC_VERSION
++		string
++		prompt "External Toolchain GCC Version" if DEVEL
++		depends on EXTERNAL_TOOLCHAIN && !NATIVE_TOOLCHAIN
++		help
++		  Manually specify the GCC version used by the selected
++		  external toolchain.
++
+ 	config TOOLCHAIN_LIBC
+ 		string
+ 		depends on EXTERNAL_TOOLCHAIN && !NATIVE_TOOLCHAIN
+diff --git a/toolchain/gcc/Config.version b/toolchain/gcc/Config.version
+index a7e55eb5caf1e..a00685ffa3f29 100644
+--- a/toolchain/gcc/Config.version
++++ b/toolchain/gcc/Config.version
+@@ -8,6 +8,7 @@ config GCC_VERSION_13
+ 
+ config GCC_VERSION
+ 	string
++	default EXTERNAL_GCC_VERSION	if EXTERNAL_TOOLCHAIN && !NATIVE_TOOLCHAIN
+ 	default "11.3.0"	if GCC_VERSION_11
+ 	default "13.1.0"	if GCC_VERSION_13
+ 	default "12.3.0"

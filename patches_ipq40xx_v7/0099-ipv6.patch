@@ -1,0 +1,35 @@
+From 27edf28b11f179eb9fc6ab159b68b2fe97ffdf1e Mon Sep 17 00:00:00 2001
+From: Paul Donald <newtwen+github@gmail.com>
+Date: Fri, 29 Mar 2024 16:04:30 +0100
+Subject: [PATCH] base-files: reduce IPv6 ULA prefix generation to a single
+ call
+
+Reduce calls and pipes and read from urandom once directly with hexdump
+for the necessary 5 bytes of random data to build the 48 bit ULA Prefix.
+
+Fewer calls and forks; finish quicker; less memory used.
+
+Tested on: 23.05.3
+
+Signed-off-by: Paul Donald <newtwen+github@gmail.com>
+---
+ .../files/etc/uci-defaults/12_network-generate-ula          | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/package/base-files/files/etc/uci-defaults/12_network-generate-ula b/package/base-files/files/etc/uci-defaults/12_network-generate-ula
+index 19d7ed7f2ea64..060d0ef640d54 100644
+--- a/package/base-files/files/etc/uci-defaults/12_network-generate-ula
++++ b/package/base-files/files/etc/uci-defaults/12_network-generate-ula
+@@ -1,11 +1,7 @@
+ [ "$(uci -q get network.globals.ula_prefix)" != "auto" ] && exit 0
+ 
+-r1=$(dd if=/dev/urandom bs=1 count=1 |hexdump -e '1/1 "%02x"')
+-r2=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+-r3=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+-
+ uci -q batch <<-EOF >/dev/null
+-	set network.globals.ula_prefix=fd$r1:$r2:$r3::/48
++	set network.globals.ula_prefix="$(hexdump -vn 5 -e '"fd" 1/1 "%02x:" 2/2 "%x:"' /dev/urandom):/48"
+ 	commit network
+ EOF
+ 

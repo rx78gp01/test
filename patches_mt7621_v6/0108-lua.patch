@@ -1,0 +1,238 @@
+From 507f9439e7b930cfd8033dbfeaf3fe7df2e9dfd3 Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Sun, 11 Feb 2024 15:06:44 -0800
+Subject: [PATCH] lua: fix CVE-2014-5461
+
+Patch taken from Debian.
+
+Refresh patches
+
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+(cherry picked from commit 78b0106f7d5093641f68d37c041a5863eb9dd9a0)
+---
+ package/utils/lua/Makefile                    |  2 +-
+ .../001-include-version-number.patch          |  3 +--
+ .../013-lnum-strtoul-parsing-fixes.patch      | 11 ++---------
+ .../lua/patches-host/100-no_readline.patch    |  6 +++---
+ .../lua/patches-host/400-CVE-2014-5461.patch  | 19 +++++++++++++++++++
+ .../patches/001-include-version-number.patch  |  3 +--
+ .../013-lnum-strtoul-parsing-fixes.patch      | 11 ++---------
+ .../utils/lua/patches/400-CVE-2014-5461.patch | 19 +++++++++++++++++++
+ 8 files changed, 48 insertions(+), 26 deletions(-)
+ create mode 100644 package/utils/lua/patches-host/400-CVE-2014-5461.patch
+ create mode 100644 package/utils/lua/patches/400-CVE-2014-5461.patch
+
+diff --git a/package/utils/lua/Makefile b/package/utils/lua/Makefile
+index 46e7bb0dcdb6c..36d332f1c762b 100644
+--- a/package/utils/lua/Makefile
++++ b/package/utils/lua/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=lua
+ PKG_VERSION:=5.1.5
+-PKG_RELEASE:=10
++PKG_RELEASE:=11
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://www.lua.org/ftp/ \
+diff --git a/package/utils/lua/patches-host/001-include-version-number.patch b/package/utils/lua/patches-host/001-include-version-number.patch
+index f769e607367fb..806d37003edc5 100644
+--- a/package/utils/lua/patches-host/001-include-version-number.patch
++++ b/package/utils/lua/patches-host/001-include-version-number.patch
+@@ -8,7 +8,6 @@ Including it allows multiple lua versions to coexist.
+ Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
+ ---
+ 
+-diff --git a/Makefile b/Makefile
+ --- a/Makefile
+ +++ b/Makefile
+ @@ -41,10 +41,10 @@ RANLIB= ranlib
+@@ -42,7 +41,7 @@ rename to doc/luac5.1.1
+ diff --git a/src/Makefile b/src/Makefile
+ --- a/src/Makefile
+ +++ b/src/Makefile
+-@@ -29,10 +29,10 @@ CORE_O=	lapi.o lcode.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o lmem.o \
++@@ -29,10 +29,10 @@ CORE_O=	lapi.o lcode.o ldebug.o ldo.o ld
+  LIB_O=	lauxlib.o lbaselib.o ldblib.o liolib.o lmathlib.o loslib.o ltablib.o \
+  	lstrlib.o loadlib.o linit.o
+  
+diff --git a/package/utils/lua/patches-host/013-lnum-strtoul-parsing-fixes.patch b/package/utils/lua/patches-host/013-lnum-strtoul-parsing-fixes.patch
+index 7f00c8c3a2dfe..8887229589d90 100644
+--- a/package/utils/lua/patches-host/013-lnum-strtoul-parsing-fixes.patch
++++ b/package/utils/lua/patches-host/013-lnum-strtoul-parsing-fixes.patch
+@@ -1,8 +1,6 @@
+-diff --git a/src/lnum.c b/src/lnum.c
+-index 1456b6a2ed23..b0632b04c2b7 100644
+ --- a/src/lnum.c
+ +++ b/src/lnum.c
+-@@ -127,6 +127,8 @@ static int luaO_str2i (const char *s, lua_Integer *res, char **endptr_ref) {
++@@ -127,6 +127,8 @@ static int luaO_str2i (const char *s, lu
+  #else
+        return 0;  /* Reject the number */
+  #endif
+@@ -11,7 +9,7 @@ index 1456b6a2ed23..b0632b04c2b7 100644
+      }
+    } else if ((v > LUA_INTEGER_MAX) || (*endptr && (!isspace(*endptr)))) {
+      return TK_NUMBER;	/* not in signed range, or has '.', 'e' etc. trailing */
+-@@ -310,3 +312,13 @@ int try_unmint( lua_Integer *r, lua_Integer ib ) {
++@@ -310,3 +312,13 @@ int try_unmint( lua_Integer *r, lua_Inte
+    return 0;
+  }
+  
+@@ -25,8 +23,6 @@ index 1456b6a2ed23..b0632b04c2b7 100644
+ +  return (unsigned LUA_INTEGER)v;
+ +}
+ +#endif
+-diff --git a/src/lnum_config.h b/src/lnum_config.h
+-index 19d7a4231a49..1092eead6629 100644
+ --- a/src/lnum_config.h
+ +++ b/src/lnum_config.h
+ @@ -141,7 +141,12 @@
+@@ -43,6 +39,3 @@ index 19d7a4231a49..1092eead6629 100644
+  #endif
+  #ifndef LUA_INTEGER_MIN
+  # define LUA_INTEGER_MIN (-LUA_INTEGER_MAX -1)  /* -2^16|32 */
+--- 
+-1.9.1
+-
+diff --git a/package/utils/lua/patches-host/100-no_readline.patch b/package/utils/lua/patches-host/100-no_readline.patch
+index 209c302bb7231..700114e43cd11 100644
+--- a/package/utils/lua/patches-host/100-no_readline.patch
++++ b/package/utils/lua/patches-host/100-no_readline.patch
+@@ -10,7 +10,7 @@
+  #if defined(LUA_USE_MACOSX)
+ --- a/src/Makefile
+ +++ b/src/Makefile
+-@@ -17,6 +17,7 @@
++@@ -17,6 +17,7 @@ LIBS= -lm $(MYLIBS)
+  MYCFLAGS=
+  MYLDFLAGS=
+  MYLIBS=
+@@ -18,7 +18,7 @@
+  
+  # == END OF USER SETTINGS. NO NEED TO CHANGE ANYTHING BELOW THIS LINE =========
+  
+-@@ -75,7 +76,7 @@
++@@ -75,7 +76,7 @@ echo:
+  	@echo "MYLIBS = $(MYLIBS)"
+  
+  # convenience targets for popular platforms
+@@ -27,7 +27,7 @@
+  none:
+  	@echo "Please choose a platform:"
+  	@echo "   $(PLATS)"
+-@@ -90,16 +91,16 @@
++@@ -90,16 +91,16 @@ bsd:
+  	$(MAKE) all MYCFLAGS="-DLUA_USE_POSIX -DLUA_USE_DLOPEN" MYLIBS="-Wl,-E"
+  
+  freebsd:
+diff --git a/package/utils/lua/patches-host/400-CVE-2014-5461.patch b/package/utils/lua/patches-host/400-CVE-2014-5461.patch
+new file mode 100644
+index 0000000000000..cce73ff96bdc3
+--- /dev/null
++++ b/package/utils/lua/patches-host/400-CVE-2014-5461.patch
+@@ -0,0 +1,19 @@
++From: Enrico Tassi <gareuselesinge@debian.org>
++Date: Tue, 26 Aug 2014 16:20:55 +0200
++Subject: Fix stack overflow in vararg functions
++
++---
++ src/ldo.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++--- a/src/ldo.c
+++++ b/src/ldo.c
++@@ -274,7 +274,7 @@ int luaD_precall (lua_State *L, StkId fu
++     CallInfo *ci;
++     StkId st, base;
++     Proto *p = cl->p;
++-    luaD_checkstack(L, p->maxstacksize);
+++    luaD_checkstack(L, p->maxstacksize + p->numparams);
++     func = restorestack(L, funcr);
++     if (!p->is_vararg) {  /* no varargs? */
++       base = func + 1;
+diff --git a/package/utils/lua/patches/001-include-version-number.patch b/package/utils/lua/patches/001-include-version-number.patch
+index f769e607367fb..806d37003edc5 100644
+--- a/package/utils/lua/patches/001-include-version-number.patch
++++ b/package/utils/lua/patches/001-include-version-number.patch
+@@ -8,7 +8,6 @@ Including it allows multiple lua versions to coexist.
+ Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
+ ---
+ 
+-diff --git a/Makefile b/Makefile
+ --- a/Makefile
+ +++ b/Makefile
+ @@ -41,10 +41,10 @@ RANLIB= ranlib
+@@ -42,7 +41,7 @@ rename to doc/luac5.1.1
+ diff --git a/src/Makefile b/src/Makefile
+ --- a/src/Makefile
+ +++ b/src/Makefile
+-@@ -29,10 +29,10 @@ CORE_O=	lapi.o lcode.o ldebug.o ldo.o ldump.o lfunc.o lgc.o llex.o lmem.o \
++@@ -29,10 +29,10 @@ CORE_O=	lapi.o lcode.o ldebug.o ldo.o ld
+  LIB_O=	lauxlib.o lbaselib.o ldblib.o liolib.o lmathlib.o loslib.o ltablib.o \
+  	lstrlib.o loadlib.o linit.o
+  
+diff --git a/package/utils/lua/patches/013-lnum-strtoul-parsing-fixes.patch b/package/utils/lua/patches/013-lnum-strtoul-parsing-fixes.patch
+index 7f00c8c3a2dfe..8887229589d90 100644
+--- a/package/utils/lua/patches/013-lnum-strtoul-parsing-fixes.patch
++++ b/package/utils/lua/patches/013-lnum-strtoul-parsing-fixes.patch
+@@ -1,8 +1,6 @@
+-diff --git a/src/lnum.c b/src/lnum.c
+-index 1456b6a2ed23..b0632b04c2b7 100644
+ --- a/src/lnum.c
+ +++ b/src/lnum.c
+-@@ -127,6 +127,8 @@ static int luaO_str2i (const char *s, lua_Integer *res, char **endptr_ref) {
++@@ -127,6 +127,8 @@ static int luaO_str2i (const char *s, lu
+  #else
+        return 0;  /* Reject the number */
+  #endif
+@@ -11,7 +9,7 @@ index 1456b6a2ed23..b0632b04c2b7 100644
+      }
+    } else if ((v > LUA_INTEGER_MAX) || (*endptr && (!isspace(*endptr)))) {
+      return TK_NUMBER;	/* not in signed range, or has '.', 'e' etc. trailing */
+-@@ -310,3 +312,13 @@ int try_unmint( lua_Integer *r, lua_Integer ib ) {
++@@ -310,3 +312,13 @@ int try_unmint( lua_Integer *r, lua_Inte
+    return 0;
+  }
+  
+@@ -25,8 +23,6 @@ index 1456b6a2ed23..b0632b04c2b7 100644
+ +  return (unsigned LUA_INTEGER)v;
+ +}
+ +#endif
+-diff --git a/src/lnum_config.h b/src/lnum_config.h
+-index 19d7a4231a49..1092eead6629 100644
+ --- a/src/lnum_config.h
+ +++ b/src/lnum_config.h
+ @@ -141,7 +141,12 @@
+@@ -43,6 +39,3 @@ index 19d7a4231a49..1092eead6629 100644
+  #endif
+  #ifndef LUA_INTEGER_MIN
+  # define LUA_INTEGER_MIN (-LUA_INTEGER_MAX -1)  /* -2^16|32 */
+--- 
+-1.9.1
+-
+diff --git a/package/utils/lua/patches/400-CVE-2014-5461.patch b/package/utils/lua/patches/400-CVE-2014-5461.patch
+new file mode 100644
+index 0000000000000..cce73ff96bdc3
+--- /dev/null
++++ b/package/utils/lua/patches/400-CVE-2014-5461.patch
+@@ -0,0 +1,19 @@
++From: Enrico Tassi <gareuselesinge@debian.org>
++Date: Tue, 26 Aug 2014 16:20:55 +0200
++Subject: Fix stack overflow in vararg functions
++
++---
++ src/ldo.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++--- a/src/ldo.c
+++++ b/src/ldo.c
++@@ -274,7 +274,7 @@ int luaD_precall (lua_State *L, StkId fu
++     CallInfo *ci;
++     StkId st, base;
++     Proto *p = cl->p;
++-    luaD_checkstack(L, p->maxstacksize);
+++    luaD_checkstack(L, p->maxstacksize + p->numparams);
++     func = restorestack(L, funcr);
++     if (!p->is_vararg) {  /* no varargs? */
++       base = func + 1;

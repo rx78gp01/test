@@ -1,0 +1,253 @@
+# Build OpenWrt using GitHub Actions
+
+name: Build OpenWrt 23.05.3 ipq40xx sfe oc openssl ksmbd ovpn26 multi
+
+on:
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/openwrt/openwrt.git
+  REPO_BRANCH: openwrt-23.05
+  REPO_BRANCH_VER: 23.05.3
+  REPO_TAG: v23.05.3
+  KERNEL_VER: 5.15.160
+  END_TAG: _896MHz
+  VERMAGIC: 39caa2a31a1045bb638bfa53831e47a9
+  TARGET_ARCH0: ipq40xx
+  TARGET_SUBARCH0: generic
+  ARCH_PACKAGES: arm_cortex-a7_neon-vfpv4
+  REPO_DEPTH: 0
+  FEEDS_CONF: feeds.conf.23053
+  CONFIG_FILE: .config_ipq40xx_sfe_openssl_ksmbd_ovpn26_multi_23053
+  FILES_PATH: files_ipq40xx_sfe
+  PATCHES_PATH: patches_ipq40xx_v7_oc
+  UPLOAD_RELEASE: true
+  TZ: UTC
+  CACHE_DIR: false
+  BUILD_TOOLCHAIN: false
+  PATCH_PMF : true
+  TOOLCHAIN_BRANCH_VER: 23.05.3
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+      with:
+        fetch-depth: 1
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install build-essential ccache ecj clang flex bison fastjar file g++ gawk \
+        gettext git java-propose-classpath libncurses5-dev \
+        libncursesw5-dev libssl-dev unzip wget curl \
+        python3-distutils rsync subversion libattr1-dev patch \
+        swig time xsltproc zlib1g-dev libboost-dev zip \
+        asciidoc binutils bzip2 libz-dev patch gcc-multilib g++-multilib
+
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+
+    - name: Clone source code
+      working-directory: /workdir
+      run: |
+        [ $REPO_DEPTH -ge 1 ] && git clone --depth $REPO_DEPTH --branch $REPO_TAG --single-branch $REPO_URL openwrt
+        [ $REPO_DEPTH -eq 0 ] && git clone --branch $REPO_TAG --single-branch $REPO_URL openwrt
+        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+    - name: Parse toolchain file
+      if: env.BUILD_TOOLCHAIN == 'false'
+      id: parse-toolchain
+      working-directory: /workdir
+      run: |
+        cd openwrt
+        [ ! -d staging_dir/cache ] && mkdir -p staging_dir/cache
+        TOOLCHAIN_PATH=releases/$TOOLCHAIN_BRANCH_VER
+        SUMS_FILE="https://downloads.cdn.openwrt.org/$TOOLCHAIN_PATH/targets/${{ env.TARGET_ARCH0 }}/${{ env.TARGET_SUBARCH0 }}/sha256sums"
+        TOOLCHAIN_STRING="$( curl $SUMS_FILE | grep ".*openwrt-toolchain.*tar.xz")"
+        TOOLCHAIN_FILE=$(echo "$TOOLCHAIN_STRING" | sed -n -e 's/.*\(openwrt-toolchain.*\).tar.xz/\1/p')
+        TOOLCHAIN_SHA256=$(echo "$TOOLCHAIN_STRING" | cut -d ' ' -f 1)
+          
+        echo "toolchain-type=external_toolchain" >> $GITHUB_OUTPUT
+        echo "TOOLCHAIN_FILE=$TOOLCHAIN_FILE" >> "$GITHUB_ENV"
+        echo "TOOLCHAIN_SHA256=$TOOLCHAIN_SHA256" >> "$GITHUB_ENV"
+        echo "TOOLCHAIN_PATH=$TOOLCHAIN_PATH" >> "$GITHUB_ENV"
+
+    - name: Cache external toolchain/sdk
+      if: env.BUILD_TOOLCHAIN == 'false'
+      id: cache-external-toolchain
+      uses: actions/cache@v4
+      with:
+        save-always: true
+        path: /workdir/openwrt/staging_dir/cache/
+        key: ${{ env.TOOLCHAIN_FILE }}-${{ steps.parse-toolchain.outputs.toolchain-type }}-${{ env.TOOLCHAIN_SHA256 }}
+
+    - name: Download external toolchain/sdk
+      if: env.BUILD_TOOLCHAIN == 'false' && steps.cache-external-toolchain.outputs.cache-hit != 'true'
+      working-directory: /workdir
+      run: |
+        cd openwrt/staging_dir/cache
+        wget -O - https://downloads.cdn.openwrt.org/${{ env.TOOLCHAIN_PATH }}/targets/${{ env.TARGET_ARCH0 }}/${{ env.TARGET_SUBARCH0 }}/${{ env.TOOLCHAIN_FILE }}.tar.xz \
+          | tar --xz -xf -
+        wget -O - https://downloads.cdn.openwrt.org/${{ env.TOOLCHAIN_PATH }}/targets/${{ env.TARGET_ARCH0 }}/${{ env.TARGET_SUBARCH0 }}/llvm-bpf-15.0.7.Linux-x86_64.tar.xz \
+          | tar --xz -xf -
+        chown -R $USER:$GROUPS /workdir/openwrt/staging_dir/cache
+
+    - name: Cache OpenWrt
+      uses: actions/cache@v4
+      if: env.CACHE_DIR == 'true'
+      env:
+        cache-name: cache-openwrt
+      with:
+        save-always: true
+        path: |
+          openwrt/staging_dir
+          openwrt/build_dir
+          openwrt/dl
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ env.REPO_BRANCH }}-${{ env.VERMAGIC }}
+#        restore-keys: |
+#          ${{ runner.os }}-build-${{ env.cache-name }}-${{ env.VERMAGIC }}
+    
+    - name: Check cache
+      run: |
+        [ -d openwrt/staging_dir ] && echo "Found staging_dir cache" || echo "No staging_dir cache"
+        [ -d openwrt/build_dir ] && echo "Found build_dir cache" || echo "No build_dir cache"
+        [ -d openwrt/dl ] && echo "Found dl cache" ||  echo "No dl cache"
+        [ -L openwrt/staging_dir/cache/llvm-bpf ] && cp -P openwrt/staging_dir/cache/llvm-bpf openwrt/llvm-bpf && \
+        cp -R openwrt/staging_dir/cache/llvm-bpf-15.0.7.Linux-x86_64 openwrt
+        [ -d openwrt/staging_dir/cache/${{ env.TOOLCHAIN_FILE }} ] && cp -R openwrt/staging_dir/cache/${{ env.TOOLCHAIN_FILE }}/toolchain-* openwrt/staging_dir
+        ls -al openwrt
+        ls -l /workdir/openwrt
+        ls -l /workdir/openwrt/staging_dir/cache
+        ls -l /workdir/openwrt/staging_dir/
+
+    - name: Setup feeds
+      run: |
+        [ -e $FEEDS_CONF ] && cp $FEEDS_CONF openwrt/feeds.conf
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Apply patches
+      run: |
+        [ -d $PATCHES_PATH ] && mv $PATCHES_PATH openwrt/$PATCHES_PATH
+        cd openwrt
+        wget https://github.com/openwrt/openwrt/commit/75e78bcaab847557ce1782eb2dea9dff9a029171.patch
+        git apply -R 75e78bcaab847557ce1782eb2dea9dff9a029171.patch
+        [ $PATCH_PMF == 'true' ] && sed -i 's|\(.*\)gt 0\(.*\)"WPA-PSK-SHA256"|\1gt 1\2"WPA-PSK-SHA256"|' package/network/services/hostapd/files/hostapd.sh
+        [ -d $PATCHES_PATH ] && for FILE in $(ls $PATCHES_PATH | grep .patch); do git apply --check $PATCHES_PATH/$FILE; git apply $PATCHES_PATH/$FILE; done
+        git status -s
+
+    - name: Load custom files
+      run: |
+        [ -d $FILES_PATH ] && mv $FILES_PATH openwrt/files
+        cd openwrt && git status -s
+
+    - name: Load custom config
+      run: |
+        [ -f $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config && echo 'Custom config loaded!' || echo 'No custom config!'
+
+    - name: Setup ccache
+      uses: Chocobo1/setup-ccache-action@v1
+      with:
+          install_ccache: false
+          update_packager_index: false
+          ccache_options: |
+            cache_dir=/home/runner/.ccache
+
+    - name: Configure ccache and apply fixes
+      if: env.BUILD_TOOLCHAIN == 'false'
+      working-directory: /workdir
+      env:
+        SYSTEM_CCACHE_CONF: /home/runner/.ccache/ccache.conf
+      run: |
+        [ ! -f $SYSTEM_CCACHE_CONF ] && touch $SYSTEM_CCACHE_CONF && chown -R $USER:$GROUPS /home/runner/.ccache
+        echo compiler_type=gcc >> $SYSTEM_CCACHE_CONF
+        echo hash_dir=false >> $SYSTEM_CCACHE_CONF
+
+    - name: Configure external toolchain
+      if: env.BUILD_TOOLCHAIN == 'false' && steps.parse-toolchain.outputs.toolchain-type == 'external_toolchain'
+      working-directory: /workdir
+      run: |
+        cd openwrt
+        ./scripts/ext-toolchain.sh \
+          --toolchain staging_dir/toolchain-* \
+          --overwrite-config \
+          --config ${{ env.TARGET_ARCH0 }}/${{ env.TARGET_SUBARCH0 }}
+
+    - name: Download package
+      id: package
+      run: |
+        cd openwrt
+        make -j$(nproc) defconfig V=s 2>&1 | tee defconfig.log
+        make -j$(nproc) toolchain/install V=sc
+        make -j8 download V=s 2>&1 | tee download.log
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+    
+    - name: Read config target
+      run: |
+        cd openwrt
+        echo "ipq40xx" > ARCH_NAME
+        echo "generic" > CPU_NAME
+        echo "linksys_ea8300" > DEVICE_NAME
+        [ -s ARCH_NAME ] && echo "ARCH_NAME=$(cat ARCH_NAME)" >> $GITHUB_ENV
+        [ -s CPU_NAME ] && echo "CPU_NAME=$(cat CPU_NAME)" >> $GITHUB_ENV
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        echo -e "Arch: $(cat ARCH_NAME)\nCPU: $(cat CPU_NAME)\nDevice: $(cat DEVICE_NAME)"
+
+    - name: Compile the firmware
+      id: compile
+      run: |
+        cd openwrt
+        rm -f target/linux/generic/backport-5.15/704-15-v5.19-net-mtk_eth_soc-move-MAC_MCR-setting-to-mac_finish.patch
+        rm -f target/linux/generic/pending-5.15/735-net-mediatek-mtk_eth_soc-release-MAC_MCR_FORCE_LINK-.patch
+        rm -f target/linux/generic/pending-5.15/736-net-ethernet-mtk_eth_soc-fix-PPE-hanging-issue.patch
+        rm -f target/linux/generic/backport-5.15/702-v5.19-01-arm64-dts-mediatek-mt7622-add-support-for-coherent-D.patch
+        rm -f target/linux/generic/backport-5.15/702-v5.19-04-arm64-dts-mediatek-mt7622-introduce-nodes-for-Wirele.patch
+        echo "$VERMAGIC" > ./vermagic0
+        echo -e "Available core: $(nproc)"
+        COMPILE_THREADS=$(($(nproc) + 1))
+        echo "Compile threads: ${COMPILE_THREADS}"
+        make -j${COMPILE_THREADS} V=s 2>&1 > build.log || make -j1 V=s 2>&1 | tee build_j1.log
+        [ -f bin/targets/$ARCH_NAME/$CPU_NAME/openwrt-${REPO_BRANCH_VER}-${ARCH_NAME}-${CPU_NAME}-${DEVICE_NAME}-squashfs-sysupgrade.bin ] && echo "status=success" >> $GITHUB_OUTPUT
+        cp .config bin/targets/$ARCH_NAME/$CPU_NAME/buildconfig
+        [ -f build_dir/target-arm-openwrt-linux-muslgnueabi_musl/linux-${ARCH_NAME}_${CPU_NAME}/linux-${KERNEL_VER}/.config ] && cp build_dir/target-arm-openwrt-linux-muslgnueabi_musl/linux-${ARCH_NAME}_${CPU_NAME}/linux-${KERNEL_VER}/.config bin/targets/$ARCH_NAME/$CPU_NAME/kconfig
+        zip -q bin/targets/$ARCH_NAME/$CPU_NAME/log.zip build.log build_j1.log defconfig.log download.log
+        [ -d bin/packages/$ARCH_PACKAGES/ ] && zip -r bin/targets/$ARCH_NAME/$CPU_NAME/openwrt-${REPO_BRANCH_VER}-${ARCH_NAME}-${CPU_NAME}-${ARCH_PACKAGES}_base_feeds_packages.zip bin/packages/$ARCH_PACKAGES/
+        echo "Make Completed"
+
+    - name: Prepare release
+      if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
+      run: |
+        touch release.txt
+        echo "Branch: $REPO_BRANCH" >> release.txt
+        echo "TAG: $REPO_TAG" >> release.txt
+        echo "Date: $(date +"%Y-%m-%d_%H:%M")" >> release.txt
+        echo "Arch: $ARCH_NAME" >> release.txt
+        echo "CPU: $CPU_NAME" >> release.txt
+        echo "Deivce: $DEVICE_NAME" >> release.txt
+        cd openwrt/bin/targets/$ARCH_NAME/$CPU_NAME
+        [ -d packages ] && zip -r openwrt-${REPO_BRANCH_VER}-${ARCH_NAME}-${CPU_NAME}-packages_all_kmods.zip packages/
+        [ -d packages ] && rm -rf packages
+        sha256sum -b openwrt-${REPO_BRANCH_VER}-${ARCH_NAME}-${CPU_NAME}-packages_all_kmods.zip >> sha256sums
+        sha256sum -b openwrt-${REPO_BRANCH_VER}-${ARCH_NAME}-${CPU_NAME}-${ARCH_PACKAGES}_base_feeds_packages.zip >> sha256sums
+        echo "FIRMWARE_PATH=$PWD" >> $GITHUB_ENV
+        echo "TAG_DATE=$(date +"%Y-%m-%d_%H_%M")" >> $GITHUB_ENV
+
+    - name: Upload release
+      uses: softprops/action-gh-release@v1
+      if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: openwrt-${{ env.REPO_BRANCH_VER }}_ipq40xx_sfe_oc_openssl_ksmbd_ovpn26_multi_${{ env.KERNEL_VER }}${{ env.END_TAG }}
+        body_path: release.txt
+        files: ${{ env.FIRMWARE_PATH }}/*

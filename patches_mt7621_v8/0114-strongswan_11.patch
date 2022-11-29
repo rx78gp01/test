@@ -1,0 +1,54 @@
+From b20950a51595078952b711c6397ba0e31390ccaf Mon Sep 17 00:00:00 2001
+From: Philip Prindeville <philipp@redfish-solutions.com>
+Date: Wed, 27 Mar 2024 14:03:00 -0600
+Subject: [PATCH] strongswan: backport upstream MUSL fix for farp_spoofer.c
+
+Signed-off-by: Philip Prindeville <philipp@redfish-solutions.com>
+---
+ ...poofer-Fix-build-with-musl-C-library.patch | 37 +++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+ create mode 100644 net/strongswan/patches/0002-farp_spoofer-Fix-build-with-musl-C-library.patch
+
+diff --git a/feeds/packages/net/strongswan/patches/0002-farp_spoofer-Fix-build-with-musl-C-library.patch b/feeds/packages/net/strongswan/patches/0002-farp_spoofer-Fix-build-with-musl-C-library.patch
+new file mode 100644
+index 0000000000000..3328c0e8de58d
+--- /dev/null
++++ b/feeds/packages/net/strongswan/patches/0002-farp_spoofer-Fix-build-with-musl-C-library.patch
+@@ -0,0 +1,37 @@
++commit 540881627fe8083207f9a2cfd01b931164c7ef4e
++Author: Tobias Brunner <tobias@strongswan.org>
++Date:   Fri Mar 22 10:42:34 2024 +0100
++
++    farp: Fix build with musl C library
++    
++    Same issue as described in the previous commit.
++    
++    Fixes: 187c72d1afdc ("dhcp: Port the plugin to FreeBSD/macOS")
++
++--- a/src/libcharon/plugins/farp/farp_spoofer.c
+++++ b/src/libcharon/plugins/farp/farp_spoofer.c
++@@ -20,12 +20,14 @@
++ 
++ #include <errno.h>
++ #include <unistd.h>
+++#include <net/ethernet.h>
++ #include <sys/ioctl.h>
++ 
++ #if !defined(__APPLE__) && !defined(__FreeBSD__)
++ #include <sys/socket.h>
++-#include <linux/if_arp.h>
++-#include <linux/if_ether.h>
+++#include <net/if_arp.h>
+++#include <netinet/if_ether.h>
+++#include <netpacket/packet.h>
++ #include <linux/filter.h>
++ #else
++ #include <net/bpf.h>
++@@ -33,7 +35,6 @@
++ #include <net/if_dl.h>
++ #endif /* !defined(__APPLE__) && !defined(__FreeBSD__) */
++ 
++-#include <net/ethernet.h>
++ #include <daemon.h>
++ #include <threading/thread.h>
++ #include <processing/jobs/callback_job.h>

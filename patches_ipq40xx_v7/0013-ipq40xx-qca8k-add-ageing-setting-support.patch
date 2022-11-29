@@ -1,0 +1,103 @@
+From 7d6425e93378e6b92d808f1dd16e5e234543d06a Mon Sep 17 00:00:00 2001
+From: Robert Marko <robimarko@gmail.com>
+Date: Sun, 13 Aug 2023 15:58:47 +0200
+Subject: [PATCH] ipq40xx: qca8k: add ageing setting support
+
+qca8k driver we are currently based of is rather out of date and is lacking
+support for setting the ageing time or fast ageing so until we update the
+driver lets just backport support for those from qca8k.
+
+Signed-off-by: Robert Marko <robimarko@gmail.com>
+---
+ .../files/drivers/net/dsa/qca/qca8k-ipq4019.c | 34 +++++++++++++++++++
+ .../files/drivers/net/dsa/qca/qca8k-ipq4019.h |  4 +++
+ 2 files changed, 38 insertions(+)
+
+diff --git a/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.c b/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.c
+index 202d1a582cb5e..0526445d65391 100644
+--- a/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.c
++++ b/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.c
+@@ -7,6 +7,7 @@
+  * Copyright (c) 2021 Robert Marko <robert.marko@sartura.hr>
+  */
+ 
++#include <linux/bitfield.h>
+ #include <linux/version.h>
+ #include <linux/etherdevice.h>
+ #include <linux/if_bridge.h>
+@@ -1330,6 +1331,37 @@ qca8k_port_bridge_leave(struct dsa_switch *ds, int port, struct net_device *br)
+ 		  QCA8K_PORT_LOOKUP_MEMBER, BIT(cpu_port));
+ }
+ 
++static void
++qca8k_port_fast_age(struct dsa_switch *ds, int port)
++{
++	struct qca8k_priv *priv = ds->priv;
++
++	mutex_lock(&priv->reg_mutex);
++	qca8k_fdb_access(priv, QCA8K_FDB_FLUSH_PORT, port);
++	mutex_unlock(&priv->reg_mutex);
++}
++
++static int
++qca8k_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
++{
++	struct qca8k_priv *priv = ds->priv;
++	unsigned int secs = msecs / 1000;
++	u32 val;
++
++	/* AGE_TIME reg is set in 7s step */
++	val = secs / 7;
++
++	/* Handle case with 0 as val to NOT disable
++	 * learning
++	 */
++	if (!val)
++		val = 1;
++
++	return qca8k_rmw(priv, QCA8K_REG_ATU_CTRL,
++	                 QCA8K_ATU_AGE_TIME_MASK,
++	                 QCA8K_ATU_AGE_TIME(val));
++}
++
+ static int
+ qca8k_port_enable(struct dsa_switch *ds, int port,
+ 		  struct phy_device *phy)
+@@ -1509,6 +1539,7 @@ static const struct dsa_switch_ops qca8k_switch_ops = {
+ 	.get_strings		= qca8k_get_strings,
+ 	.get_ethtool_stats	= qca8k_get_ethtool_stats,
+ 	.get_sset_count		= qca8k_get_sset_count,
++	.set_ageing_time	= qca8k_set_ageing_time,
+ 	.get_mac_eee		= qca8k_get_mac_eee,
+ 	.set_mac_eee		= qca8k_set_mac_eee,
+ 	.port_enable		= qca8k_port_enable,
+@@ -1518,6 +1549,7 @@ static const struct dsa_switch_ops qca8k_switch_ops = {
+ 	.port_stp_state_set	= qca8k_port_stp_state_set,
+ 	.port_bridge_join	= qca8k_port_bridge_join,
+ 	.port_bridge_leave	= qca8k_port_bridge_leave,
++	.port_fast_age		= qca8k_port_fast_age,
+ 	.port_fdb_add		= qca8k_port_fdb_add,
+ 	.port_fdb_del		= qca8k_port_fdb_del,
+ 	.port_fdb_dump		= qca8k_port_fdb_dump,
+diff --git a/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.h b/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.h
+index 1133501335bad..1e1f45a443ef1 100644
+--- a/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.h
++++ b/target/linux/ipq40xx/files/drivers/net/dsa/qca/qca8k-ipq4019.h
+@@ -128,6 +128,9 @@
+ #define   QCA8K_VTU_FUNC1_BUSY				BIT(31)
+ #define   QCA8K_VTU_FUNC1_VID_S				16
+ #define   QCA8K_VTU_FUNC1_FULL				BIT(4)
++#define QCA8K_REG_ATU_CTRL				0x618
++#define   QCA8K_ATU_AGE_TIME_MASK			GENMASK(15, 0)
++#define   QCA8K_ATU_AGE_TIME(x)				FIELD_PREP(QCA8K_ATU_AGE_TIME_MASK, (x))
+ #define QCA8K_REG_GLOBAL_FW_CTRL0			0x620
+ #define   QCA8K_GLOBAL_FW_CTRL0_CPU_PORT_EN		BIT(10)
+ #define QCA8K_REG_GLOBAL_FW_CTRL1			0x624
+@@ -240,6 +243,7 @@ enum qca8k_fdb_cmd {
+ 	QCA8K_FDB_FLUSH	= 1,
+ 	QCA8K_FDB_LOAD = 2,
+ 	QCA8K_FDB_PURGE = 3,
++	QCA8K_FDB_FLUSH_PORT = 5,
+ 	QCA8K_FDB_NEXT = 6,
+ 	QCA8K_FDB_SEARCH = 7,
+ };

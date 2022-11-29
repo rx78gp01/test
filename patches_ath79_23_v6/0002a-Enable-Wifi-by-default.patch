@@ -1,0 +1,25 @@
+From 9ec3889b907c89952a1db7264087b7e234214001 Mon Sep 17 00:00:00 2001
+From: XFY9326 <1069665464@qq.com>
+Date: Sat, 18 Sep 2021 18:18:35 +0100
+Subject: [PATCH] Enable Wifi by default
+
+---
+ package/kernel/mac80211/files/lib/wifi/mac80211.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/package/kernel/mac80211/files/lib/wifi/mac80211.sh b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+index 3e99f06..e8a6136 100644
+--- a/package/kernel/mac80211/files/lib/wifi/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+@@ -203,7 +203,7 @@ detect_mac80211() {
+ 			set wireless.${name}.channel=${channel}
+ 			set wireless.${name}.band=${mode_band}
+ 			set wireless.${name}.htmode=$htmode
+-			set wireless.${name}.disabled=1
++			set wireless.${name}.disabled=0
+ 
+ 			set wireless.default_${name}=wifi-iface
+ 			set wireless.default_${name}.device=${name}
+-- 
+2.25.1
+

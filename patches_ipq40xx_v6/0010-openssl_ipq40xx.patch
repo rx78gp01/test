@@ -1,0 +1,13 @@
+diff --git a/target/linux/ipq40xx/Makefile b/target/linux/ipq40xx/Makefile
+index 53b2f909aeb3b..476186cab083b 100644
+--- a/target/linux/ipq40xx/Makefile
++++ b/target/linux/ipq40xx/Makefile
+@@ -16,7 +16,7 @@ include $(INCLUDE_DIR)/target.mk
+ DEFAULT_PACKAGES += \
+ 	kmod-usb-dwc3-qcom \
+ 	kmod-leds-gpio kmod-gpio-button-hotplug \
+-	kmod-ath10k-ct wpad-basic-mbedtls \
++	kmod-ath10k-ct wpad-basic-openssl \
+ 	kmod-usb3 kmod-usb-dwc3 ath10k-firmware-qca4019-ct \
+ 	uboot-envtools
+ 

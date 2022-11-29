@@ -1,0 +1,700 @@
+From 171107170562c4f9243678ae0765c0248f4c4474 Mon Sep 17 00:00:00 2001
+From: Rodrigo Balerdi <lanchon@gmail.com>
+Date: Sun, 5 May 2024 06:04:07 -0300
+Subject: [PATCH] ipq40xx: add support for Linksys WHW03 V1
+
+Hardware:
+=========
+SOC:             Qualcomm IPQ4019
+WiFi 1:          QCA4019 IEEE 802.11b/g/n
+WiFi 2:          QCA4019 IEEE 802.11a/n/ac
+WiFi 3:          QCA9886 IEEE 802.11a/n/ac
+Bluetooth:       Qualcomm CSR8510 (A10)
+Zigbee:          Silicon Labs EM3581 NCP + Skyworks SE2432L
+Ethernet:        Qualcomm Atheros QCA8072 (2-port)
+Flash:           Samsung KLM4G1FEPD (4GB eMMC)
+RAM (NAND):      512MB
+LED Controller:  NXP PCA9633 (I2C)
+Buttons:         Single reset button (GPIO).
+
+Ethernet:
+=========
+The device has 2 ethernet ports, configured as follows by default:
+- left port: WAN
+- right port: LAN
+
+Wifi:
+=====
+The Wifi radios are turned off by default. To configure the router,
+you will need to connect your computer to the LAN port of the device.
+
+Bluetooth and Zigbee:
+=====================
+Configuration included but not tested.
+
+Storage:
+========
+For compatibility with stock firmware, all of OpenWrt runs in a 136 MiB
+eMMC partition (of which there are two copies, see below). You can also
+use partition /dev/mmcblk0p19 "syscfg" (3.4 GiB) any way you see fit.
+During very limited tests, stock firmware did not mount this partition.
+However, backing up its stock content before use is recommended anyway.
+
+Firmware:
+=========
+The device uses a dual firmware mechanism: it automatically reverts to
+the previous firmware after 3 failed boot attempts.
+
+You can switch to the inactive firmware copy by changing the "boot_part"
+U-Boot environment variable. You can also do it by turning on the device
+for a couple of seconds and then back off, 3 times in a row.
+
+Installation:
+=============
+OpenWrt's "factory" image can be installed via the stock web UI:
+1. Login to the UI. (The default password is printed on the label.)
+2. Enter support mode by clicking on the "CA" link at the bottom.
+3. Click "Connectivity", "Choose file", "Start", and ignore warnings.
+
+This port is based on work done by flipy (https://github.com/flipy).
+
+Signed-off-by: Rodrigo Balerdi <lanchon@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/15345
+Signed-off-by: Robert Marko <robimarko@gmail.com>
+(cherry picked from commit c90487556229ae264dec33305e5c71c4ef7dd1c5)
+---
+ package/boot/uboot-envtools/files/ipq40xx     |   3 +
+ .../ipq40xx/base-files/etc/board.d/02_network |   5 +
+ .../etc/hotplug.d/firmware/11-ath10k-caldata  |  12 +
+ .../ipq40xx/base-files/etc/init.d/bootcount   |  32 ++
+ .../lib/preinit/05_set_iface_mac_ipq40xx.sh   |   6 +
+ .../ipq40xx/base-files/lib/upgrade/linksys.sh |  68 ++++
+ .../base-files/lib/upgrade/platform.sh        |   6 +-
+ .../arch/arm/boot/dts/qcom-ipq4019-whw03.dts  | 351 ++++++++++++++++++
+ target/linux/ipq40xx/image/generic.mk         |  14 +
+ 9 files changed, 496 insertions(+), 1 deletion(-)
+ create mode 100644 target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03.dts
+
+diff --git a/package/boot/uboot-envtools/files/ipq40xx b/package/boot/uboot-envtools/files/ipq40xx
+index 8d993fae3668b..6c6e5b9e85958 100644
+--- a/package/boot/uboot-envtools/files/ipq40xx
++++ b/package/boot/uboot-envtools/files/ipq40xx
+@@ -66,6 +66,9 @@ linksys,mr8300)
+ linksys,whw01)
+ 	ubootenv_add_uci_config "/dev/mtd6" "0x0" "0x40000" "0x10000"
+ 	;;
++linksys,whw03)
++        ubootenv_add_uci_config "/dev/mmcblk0p11" "0x0" "0x100000"
++        ;;
+ linksys,whw03v2)
+ 	ubootenv_add_uci_config "/dev/mtd6" "0x0" "0x80000" "0x20000"
+ 	;;
+diff --git a/target/linux/ipq40xx/base-files/etc/board.d/02_network b/target/linux/ipq40xx/base-files/etc/board.d/02_network
+index 5de62f1d7d0f2..6a0562a857ffb 100644
+--- a/target/linux/ipq40xx/base-files/etc/board.d/02_network
++++ b/target/linux/ipq40xx/base-files/etc/board.d/02_network
+@@ -36,6 +36,7 @@ ipq40xx_setup_interfaces()
+ 	glinet,gl-ap1300|\
+ 	glinet,gl-b2200|\
+ 	google,wifi|\
++	linksys,whw03|\
+ 	linksys,whw03v2|\
+ 	luma,wrtq-329acn|\
+ 	mikrotik,cap-ac|\
+@@ -201,6 +202,10 @@ ipq40xx_setup_macs()
+ 		lan_mac=$(macaddr_add "$wan_mac" 1)
+ 		label_mac=$wan_mac
+ 		;;
++	linksys,whw03)
++		wan_mac=$(mmc_get_mac_ascii devinfo hw_mac_addr)
++		lan_mac="$wan_mac"
++		;;
+ 	mikrotik,cap-ac |\
+ 	mikrotik,hap-ac2|\
+ 	mikrotik,hap-ac3|\
+diff --git a/target/linux/ipq40xx/base-files/etc/hotplug.d/firmware/11-ath10k-caldata b/target/linux/ipq40xx/base-files/etc/hotplug.d/firmware/11-ath10k-caldata
+index c8cf297e8104a..64296bd64ac6f 100644
+--- a/target/linux/ipq40xx/base-files/etc/hotplug.d/firmware/11-ath10k-caldata
++++ b/target/linux/ipq40xx/base-files/etc/hotplug.d/firmware/11-ath10k-caldata
+@@ -40,6 +40,10 @@ case "$FIRMWARE" in
+ 		# OEM assigns 4 sequential MACs
+ 		ath10k_patch_mac $(macaddr_setbit_la $(macaddr_add "$(cat /sys/class/net/eth0/address)" 4))
+ 		;;
++	linksys,whw03)
++		caldata_extract_mmc "0:ART" 0x9000 0x2f20
++		ath10k_patch_mac $(macaddr_add "$(cat /sys/class/net/eth0/address)" 3)
++		;;
+ 	netgear,rbr50|\
+ 	netgear,rbs50|\
+ 	netgear,srr60|\
+@@ -104,6 +108,10 @@ case "$FIRMWARE" in
+ 		caldata_extract "ART" 0x1000 0x2f20
+ 		ath10k_patch_mac $(macaddr_add "$(cat /sys/class/net/eth0/address)" 2)
+ 		;;
++	linksys,whw03)
++		caldata_extract_mmc "0:ART" 0x1000 0x2f20
++		ath10k_patch_mac $(macaddr_add "$(cat /sys/class/net/eth0/address)" 1)
++		;;
+ 	meraki,mr33 |\
+ 	meraki,mr74)
+ 		caldata_extract_ubi "ART" 0x1000 0x2f20
+@@ -200,6 +208,10 @@ case "$FIRMWARE" in
+ 		caldata_extract "ART" 0x5000 0x2f20
+ 		ath10k_patch_mac $(macaddr_add "$(cat /sys/class/net/eth0/address)" 3)
+ 		;;
++	linksys,whw03)
++		caldata_extract_mmc "0:ART" 0x5000 0x2f20
++		ath10k_patch_mac $(macaddr_add "$(cat /sys/class/net/eth0/address)" 2)
++		;;
+ 	meraki,mr33 |\
+ 	meraki,mr74)
+ 		caldata_extract_ubi "ART" 0x5000 0x2f20
+diff --git a/target/linux/ipq40xx/base-files/etc/init.d/bootcount b/target/linux/ipq40xx/base-files/etc/init.d/bootcount
+index df656c9b85b71..0120f78cfe840 100755
+--- a/target/linux/ipq40xx/base-files/etc/init.d/bootcount
++++ b/target/linux/ipq40xx/base-files/etc/init.d/bootcount
+@@ -2,6 +2,35 @@
+ 
+ START=99
+ 
++mmc_resetbc() {
++	local part_label="$1"
++
++	. /lib/functions.sh
++
++	local part_device="$(find_mmc_part "$part_label")"
++	if [ "$part_device" = "" ]; then
++		>&2 echo "mmc_resetbc: Unknown partition label: $part_label"
++		return 1
++	fi
++
++	local magic_number="$(hexdump -e '"0x%02x\n"' -n 4 "$part_device")"
++	if [ "$magic_number" != "0x20110811" ]; then
++		>&2 echo "mmc_resetbc: Unexpected partition magic: $magic_number"
++		return 1
++	fi
++
++	local last_count=$(hexdump -e '"0x%02x\n"' -n 4 -s 4 "$part_device")
++	if [ "$last_count" != "0x00" ]; then
++		printf "\x00" | dd of="$part_device" bs=4 seek=1 count=1 conv=notrunc 2>/dev/null
++
++		last_count=$(hexdump -e '"0x%02x\n"' -n 4 -s 4 "$part_device")
++		if [ "$last_count" != "0x00" ]; then
++			>&2 echo "mmc_resetbc: Unable to reset boot counter"
++			return 1
++		fi
++	fi
++}
++
+ boot() {
+ 	case $(board_name) in
+ 	alfa-network,ap120c-ac)
+@@ -15,6 +44,9 @@ boot() {
+ 	linksys,whw03v2)
+ 		mtd resetbc s_env || true
+ 		;;
++	linksys,whw03)
++		mmc_resetbc s_env || true
++		;;
+ 	netgear,wac510)
+ 		fw_setenv boot_cnt=0
+ 		;;
+diff --git a/target/linux/ipq40xx/base-files/lib/preinit/05_set_iface_mac_ipq40xx.sh b/target/linux/ipq40xx/base-files/lib/preinit/05_set_iface_mac_ipq40xx.sh
+index ce0b55bb80915..114039846be82 100644
+--- a/target/linux/ipq40xx/base-files/lib/preinit/05_set_iface_mac_ipq40xx.sh
++++ b/target/linux/ipq40xx/base-files/lib/preinit/05_set_iface_mac_ipq40xx.sh
+@@ -29,6 +29,12 @@ preinit_set_mac_address() {
+ 		ip link set dev lan4 address $(macaddr_add "$base_mac_la" 4)
+ 		ip link set dev eth0 address $(macaddr_add "$base_mac_la" 5)
+ 		;;
++	linksys,whw03)
++		base_mac=$(mmc_get_mac_ascii devinfo hw_mac_addr)
++		ip link set dev eth0 address "$base_mac"
++		ip link set dev lan address "$base_mac"
++		ip link set dev wan address "$base_mac"
++		;;
+ 	mikrotik,wap-ac|\
+ 	mikrotik,wap-ac-lte|\
+ 	mikrotik,wap-r-ac)
+diff --git a/target/linux/ipq40xx/base-files/lib/upgrade/linksys.sh b/target/linux/ipq40xx/base-files/lib/upgrade/linksys.sh
+index 18366fc622a47..860c3fd2de997 100644
+--- a/target/linux/ipq40xx/base-files/lib/upgrade/linksys.sh
++++ b/target/linux/ipq40xx/base-files/lib/upgrade/linksys.sh
+@@ -123,3 +123,71 @@ platform_do_upgrade_linksys() {
+ 		get_image "$1" | mtd -e "$part_label" write - "$part_label"
+ 	}
+ }
++
++linksys_get_cmdline_rootfs_device() {
++	if read cmdline < /proc/cmdline; then
++		case "$cmdline" in
++		*root=*)
++			local str="${cmdline##*root=}"
++			echo "${str%% *}"
++			return
++			;;
++		esac
++	fi
++	return 1
++}
++
++linksys_get_current_boot_part_emmc() {
++	local boot_part="$(fw_printenv -n boot_part)"
++	if [ "$boot_part" = 1 ] || [ "$boot_part" = 2 ]; then
++		v "Current boot_part=$boot_part selected from bootloader environment"
++	else
++		local rootfs_device="$(linksys_get_cmdline_rootfs_device)"
++		if [ "$rootfs_device" = "$(find_mmc_part "rootfs")" ]; then
++			boot_part=1
++		elif [ "$rootfs_device" = "$(find_mmc_part "alt_rootfs")" ]; then
++			boot_part=2
++		else
++			v "Could not determine current boot_part"
++			return 1
++		fi
++		v "Current boot_part=$boot_part selected from cmdline rootfs=$rootfs_device"
++	fi
++	echo $boot_part
++}
++
++linksys_set_target_partitions_emmc() {
++	local current_boot_part="$1"
++
++	if [ "$current_boot_part" = 1 ]; then
++		CI_KERNPART="alt_kernel"
++		CI_ROOTPART="alt_rootfs"
++		fw_setenv -s - <<-EOF
++			boot_part 2
++			auto_recovery yes
++		EOF
++	elif [ "$current_boot_part" = 2 ]; then
++		CI_KERNPART="kernel"
++		CI_ROOTPART="rootfs"
++		fw_setenv -s - <<-EOF
++			boot_part 1
++			auto_recovery yes
++		EOF
++	else
++		v "Could not set target eMMC partitions"
++		return 1
++	fi
++
++	v "Target eMMC partitions: $CI_KERNPART, $CI_ROOTPART"
++}
++
++platform_do_upgrade_linksys_emmc() {
++	local file="$1"
++
++	mkdir -p /var/lock
++	local current_boot_part="$(linksys_get_current_boot_part_emmc)"
++	linksys_set_target_partitions_emmc "$current_boot_part" || exit 1
++	touch /var/lock/fw_printenv.lock
++
++	emmc_do_upgrade "$file"
++}
+diff --git a/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh b/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
+index 647ffc5c43d72..17886c2c513ce 100644
+--- a/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
++++ b/target/linux/ipq40xx/base-files/lib/upgrade/platform.sh
+@@ -173,6 +173,9 @@ platform_do_upgrade() {
+ 	linksys,whw03v2)
+ 		platform_do_upgrade_linksys "$1"
+ 		;;
++	linksys,whw03)
++		platform_do_upgrade_linksys_emmc "$1"
++		;;
+ 	meraki,mr33 |\
+ 	meraki,mr74)
+ 		CI_KERNPART="part.safe"
+@@ -231,7 +234,8 @@ platform_do_upgrade() {
+ platform_copy_config() {
+ 	case "$(board_name)" in
+ 	glinet,gl-b2200 |\
+-	google,wifi)
++	google,wifi |\
++	linksys,whw03)
+ 		emmc_copy_config
+ 		;;
+ 	esac
+diff --git a/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03.dts b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03.dts
+new file mode 100644
+index 0000000000000..c835a2216e5a9
+--- /dev/null
++++ b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03.dts
+@@ -0,0 +1,351 @@
++// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
++
++#include "qcom-ipq4019.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/soc/qcom,tcsr.h>
++#include <dt-bindings/leds/common.h>
++
++/ {
++	model = "Linksys WHW03 (Velop)";
++	compatible = "linksys,whw03", "qcom,ipq4019";
++
++	aliases {
++		led-boot = &led_blue;
++		led-failsafe = &led_red;
++		led-running = &led_blue;
++		led-upgrade = &led_red;
++	};
++
++	// Default bootargs include rootfstype=ext4 and need to be overriden.
++	chosen {
++		bootargs-append = " rootfstype=squashfs";
++	};
++
++	soc {
++		ess-tcsr@1953000 {
++			compatible = "qcom,tcsr";
++			reg = <0x1953000 0x1000>;
++			qcom,ess-interface-select = <TCSR_ESS_PSGMII>;
++		};
++
++
++		tcsr@1949000 {
++			compatible = "qcom,tcsr";
++			reg = <0x1949000 0x100>;
++			qcom,wifi_glb_cfg = <TCSR_WIFI_GLB_CFG>;
++		};
++
++		tcsr@194b000 {
++			compatible = "qcom,tcsr";
++			reg = <0x194b000 0x100>;
++			qcom,usb-hsphy-mode-select = <TCSR_USB_HSPHY_HOST_MODE>;
++		};
++
++		tcsr@1957000 {
++			compatible = "qcom,tcsr";
++			reg = <0x1957000 0x100>;
++			qcom,wifi_noc_memtype_m0_m2 = <TCSR_WIFI_NOC_MEMTYPE_M0_M2>;
++		};
++	};
++
++
++	keys {
++		compatible = "gpio-keys";
++
++		reset {
++			label = "reset";
++			gpios = <&tlmm 18 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++};
++
++
++&tlmm {
++	mdio_pins: mdio-pinmux {
++		mux-1 {
++			pins = "gpio6";
++			function = "mdio";
++			bias-pull-up;
++		};
++
++		mux-2 {
++			pins = "gpio7";
++			function = "mdc";
++			bias-pull-up;
++		};
++	};
++
++	sd_pins: sd-pinmux {
++		pins = "gpio23", "gpio24", "gpio25", "gpio26",
++			"gpio27", "gpio28", "gpio29", "gpio30",
++			"gpio31", "gpio32";
++		function = "sdio";
++	};
++
++	i2c_0_pins: i2c-0-pinmux {
++		pins = "gpio58", "gpio59";
++		function = "blsp_i2c0";
++		bias-disable;
++	};
++
++	serial_0_pins: serial0-pinmux {
++		pins = "gpio16", "gpio17";
++		function = "blsp_uart0";
++		bias-disable;
++	};
++
++	serial_1_pins: serial1-pinmux {
++		pins = "gpio8", "gpio9", "gpio10", "gpio11";
++		function = "blsp_uart1";
++		bias-disable;
++	};
++
++	spi_0_pins: spi-0-pinmux {
++		pins = "gpio12", "gpio13", "gpio14", "gpio15";
++		function = "blsp_spi0";
++		bias-disable;
++	};
++
++	spi_1_pins: spi-1-pinmux {
++		mux-1 {
++			pins = "gpio44", "gpio46", "gpio47";
++			function = "blsp_spi1";
++			bias-disable;
++		};
++
++		mux-2 {
++			pins = "gpio45", "gpio49";
++			function = "gpio";
++			bias-pull-up;
++			output-high;
++		};
++
++		host-interrupt {
++			pins = "gpio42";
++			function = "gpio";
++			input;
++		};
++	};
++
++	wifi_0_pins: wifi0-pinmux {
++		pins = "gpio52";
++		function = "gpio";
++		drive-strength = <6>;
++		bias-pull-up;
++		output-high;
++	};
++
++	zigbee-0 {
++		gpio-hog;
++		gpios = <29 GPIO_ACTIVE_HIGH>;
++		bias-disable;
++		output-low;
++	};
++
++	zigbee-1 {
++		gpio-hog;
++		gpios = <50 GPIO_ACTIVE_HIGH>;
++		bias-disable;
++		input;
++	};
++
++	bluetooth-enable {
++		gpio-hog;
++		gpios = <32 GPIO_ACTIVE_HIGH>;
++		output-high;
++	};
++};
++
++&mdio {
++	status = "okay";
++	pinctrl-0 = <&mdio_pins>;
++	pinctrl-names = "default";
++	reset-gpios = <&tlmm 41 GPIO_ACTIVE_LOW>;
++};
++
++&ethphy0 {
++	status = "disabled";
++};
++
++&ethphy1 {
++	status = "disabled";
++};
++
++&ethphy2 {
++	status = "disabled";
++};
++
++&watchdog {
++	status = "okay";
++};
++
++&prng {
++	status = "okay";
++};
++
++&blsp_dma {
++	status = "okay";
++};
++
++&cryptobam {
++	num-channels = <4>;
++	qcom,num-ees = <2>;
++
++	status = "okay";
++};
++
++&crypto {
++	status = "okay";
++};
++
++&vqmmc {
++	status = "okay";
++};
++
++&blsp1_uart1 {
++	status = "okay";
++	pinctrl-0 = <&serial_0_pins>;
++	pinctrl-names = "default";
++};
++
++&blsp1_uart2 {
++	status = "okay";
++	pinctrl-0 = <&serial_1_pins>;
++	pinctrl-names = "default";
++
++	bluetooth {
++		compatible = "csr,8811";
++
++		enable-gpios = <&tlmm 32 GPIO_ACTIVE_HIGH>;
++	};
++};
++
++&blsp1_spi2 {
++	pinctrl-0 = <&spi_1_pins>;
++	pinctrl-names = "default";
++	status = "okay";
++
++	cs-gpios = <&tlmm 45 GPIO_ACTIVE_HIGH>;
++
++	zigbee@0 {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		compatible = "silabs,em3581";
++		reg = <0>;
++		spi-max-frequency = <12000000>;
++	};
++};
++
++&blsp1_i2c3 {
++	pinctrl-0 = <&i2c_0_pins>;
++	pinctrl-names = "default";
++
++	status = "okay";
++
++	// RGB LEDs
++	pca9633: led-controller@62 {
++		compatible = "nxp,pca9633";
++		nxp,hw-blink;
++		reg = <0x62>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		led_red: red@0 {
++			color = <LED_COLOR_ID_RED>;
++			function = LED_FUNCTION_INDICATOR;
++			reg = <0>;
++		};
++
++		led_green: green@1 {
++			color = <LED_COLOR_ID_GREEN>;
++			function = LED_FUNCTION_INDICATOR;
++			reg = <1>;
++		};
++
++		led_blue: blue@2 {
++			color = <LED_COLOR_ID_BLUE>;
++			function = LED_FUNCTION_INDICATOR;
++			reg = <2>;
++		};
++	};
++};
++
++&sdhci {
++	vqmmc-supply = <&vqmmc>;
++	pinctrl-0 = <&sd_pins>;
++	pinctrl-names = "default";
++	cd-gpios = <&tlmm 22 GPIO_ACTIVE_LOW>;
++	sd-ldo-gpios = <&tlmm 33 GPIO_ACTIVE_LOW>;
++	status = "okay";
++};
++
++&pcie0 {
++	status = "okay";
++
++	perst-gpios = <&tlmm 38 GPIO_ACTIVE_LOW>;
++	wake-gpios = <&tlmm 40 GPIO_ACTIVE_LOW>;
++	clkreq-gpios = <&tlmm 39 GPIO_ACTIVE_LOW>;
++
++	bridge@0,0 {
++		reg = <0x00000000 0 0 0 0>;
++		#address-cells = <3>;
++		#size-cells = <2>;
++		ranges;
++
++		wifi2: wifi@1,0 {
++			compatible = "qcom,ath10k";
++			reg = <0x00000000 0 0 0 0>;
++		};
++	};
++};
++
++&qpic_bam {
++	status = "okay";
++};
++
++&gmac {
++	status = "okay";
++};
++
++&switch {
++	status = "okay";
++};
++
++&swport4 {
++	status = "okay";
++	label = "lan";
++};
++
++&swport5 {
++	status = "okay";
++	label = "wan";
++};
++
++&wifi0 {
++	pinctrl-0 = <&wifi_0_pins>;
++	pinctrl-names = "default";
++
++	status = "okay";
++
++	qcom,coexist-support = <1>;
++	qcom,coexist-gpio-pin = <52>;
++
++	qcom,ath10k-calibration-variant = "linksys-whw03";
++};
++
++&wifi1 {
++	status = "okay";
++
++	ieee80211-freq-limit = <5170000 5330000>;
++	qcom,ath10k-calibration-variant = "linksys-whw03";
++};
++
++&wifi2 {
++	status = "okay";
++
++	ieee80211-freq-limit = <5490000 5835000>;
++	qcom,ath10k-calibration-variant = "linksys-whw03";
++};
+diff --git a/target/linux/ipq40xx/image/generic.mk b/target/linux/ipq40xx/image/generic.mk
+index ff5d5f26aad01..75d43881e2ffa 100644
+--- a/target/linux/ipq40xx/image/generic.mk
++++ b/target/linux/ipq40xx/image/generic.mk
+@@ -711,6 +711,20 @@ define Device/linksys_mr8300
+ endef
+ TARGET_DEVICES += linksys_mr8300
+ 
++define Device/linksys_whw03
++	$(call Device/FitzImage)
++	DEVICE_VENDOR := Linksys
++	DEVICE_MODEL := WHW03
++	SOC := qcom-ipq4019
++	KERNEL_SIZE := 8192k
++	IMAGE_SIZE := 131072k
++	IMAGES += factory.bin
++	IMAGE/factory.bin  := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-rootfs | pad-rootfs | linksys-image type=WHW03
++	DEVICE_PACKAGES := ath10k-firmware-qca9888-ct kmod-leds-pca963x kmod-spi-dev kmod-bluetooth \
++		kmod-fs-ext4 e2fsprogs kmod-fs-f2fs mkf2fs losetup
++endef
++TARGET_DEVICES += linksys_whw03
++
+ define Device/linksys_whw03v2
+ 	$(call Device/FitzImage)
+ 	DEVICE_VENDOR := Linksys

@@ -1,0 +1,37 @@
+From 26548c42549577cb166f2ffc17849144ba2ab48f Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Sun, 31 Mar 2024 19:57:03 +0200
+Subject: [PATCH] unetd: update to Git HEAD (2024-03-31)
+
+52144f723bec pex: after receiving data update req, notify peer of local address/port
+29aacb9386e0 pex: track indirect hosts (reachable via gateway) as peers without adding them to wg
+48049524d4fc pex: do not send peer notifications for hosts with a gateway
+12ac684ee22a pex: do not query for hosts with a gateway
+203c88857354 pex: fix endian issues on config transfer
+a29d45c71bca network: fix endian issue in converting port to network id
+cbbe9d337a17 unet-cli: emit id by default
+806457664ab6 unet-cli: strip initial newline in usage message
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+(cherry picked from commit a112ed4126c258a63698774b1e600584c1ccd5a8)
+---
+ package/network/services/unetd/Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package/network/services/unetd/Makefile b/package/network/services/unetd/Makefile
+index 7d8ed9a144caa..6873061492fa1 100644
+--- a/package/network/services/unetd/Makefile
++++ b/package/network/services/unetd/Makefile
+@@ -10,9 +10,9 @@ include $(TOPDIR)/rules.mk
+ PKG_NAME:=unetd
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL=$(PROJECT_GIT)/project/unetd.git
+-PKG_SOURCE_DATE:=2023-05-31
+-PKG_SOURCE_VERSION:=7d3986b7a5a20b9af0dacd053b2657210385e7bb
+-PKG_MIRROR_HASH:=07f0a4cbae3e80c6309bb8aa27fcef19fbc56093a9c7e426e0d527227af09429
++PKG_SOURCE_DATE:=2024-03-31
++PKG_SOURCE_VERSION:=806457664ab6e952a7f4febb82e891f596fe577c
++PKG_MIRROR_HASH:=0d3952f8079476e68487094b49c9c39074a1068c932f204a87c609074ce30d74
+ 
+ PKG_LICENSE:=GPL-2.0
+ PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>

@@ -1,0 +1,45 @@
+From 677ecd09d28ab8c34c3fc3cfcadea88dee94fdf5 Mon Sep 17 00:00:00 2001
+From: Rodrigo Balerdi <lanchon@gmail.com>
+Date: Tue, 16 Apr 2024 17:47:20 -0300
+Subject: [PATCH] ipq40xx: whw03v2: enable additional 5 GHz channels
+
+This device supports channel ranges 36-64 and 100-165, just like
+others based on the same reference design, but its current DTS is
+unnecessarily restricting these ranges to 36-48 and 149-165.
+
+Signed-off-by: Rodrigo Balerdi <lanchon@gmail.com>
+(cherry picked from commit 1c32cee348f54e9f64b5928ee1a1efe491eec137)
+---
+ .../ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03v2.dts | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03v2.dts b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03v2.dts
+index 1f0572b8798f6..e01be0ae4bc94 100644
+--- a/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03v2.dts
++++ b/target/linux/ipq40xx/files/arch/arm/boot/dts/qcom-ipq4019-whw03v2.dts
+@@ -488,7 +488,6 @@
+ 	qcom,coexist-support = <1>;
+ 	qcom,coexist-gpio-pin = <0x34>;
+ 
+-	ieee80211-freq-limit = <2401000 2473000>;
+ 	qcom,ath10k-calibration-variant = "linksys-whw03v2";
+ 
+ 	nvmem-cell-names = "pre-calibration", "mac-address";
+@@ -499,7 +498,7 @@
+ &wifi1 {
+ 	status = "okay";
+ 
+-	ieee80211-freq-limit = <5170000 5250000>;
++	ieee80211-freq-limit = <5170000 5330000>;
+ 	qcom,ath10k-calibration-variant = "linksys-whw03v2";
+ 
+ 	nvmem-cell-names = "pre-calibration", "mac-address";
+@@ -510,7 +509,7 @@
+ &wifi2 {
+ 	status = "okay";
+ 
+-	ieee80211-freq-limit = <5735000 5835000>;
++	ieee80211-freq-limit = <5490000 5835000>;
+ 	qcom,ath10k-calibration-variant = "linksys-whw03v2";
+ 
+ 	nvmem-cell-names = "pre-calibration", "mac-address";

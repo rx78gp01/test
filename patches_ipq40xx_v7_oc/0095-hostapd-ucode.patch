@@ -1,0 +1,25 @@
+From 1ee5b7e506f937e16737472eed02bc5409716304 Mon Sep 17 00:00:00 2001
+From: Felix Fietkau <nbd@nbd.name>
+Date: Wed, 10 Apr 2024 13:46:40 +0200
+Subject: [PATCH] hostapd: fix a crash corner case
+
+On some setup failures, iface->bss can be NULL
+
+Signed-off-by: Felix Fietkau <nbd@nbd.name>
+---
+ package/network/services/hostapd/src/src/ap/ucode.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/package/network/services/hostapd/src/src/ap/ucode.c b/package/network/services/hostapd/src/src/ap/ucode.c
+index 16d1b5153607b..d3441902086eb 100644
+--- a/package/network/services/hostapd/src/src/ap/ucode.c
++++ b/package/network/services/hostapd/src/src/ap/ucode.c
+@@ -51,7 +51,7 @@ hostapd_ucode_update_bss_list(struct hostapd_iface *iface, uc_value_t *if_bss, u
+ 	int i;
+ 
+ 	list = ucv_array_new(vm);
+-	for (i = 0; i < iface->num_bss; i++) {
++	for (i = 0; iface->bss && i < iface->num_bss; i++) {
+ 		struct hostapd_data *hapd = iface->bss[i];
+ 		uc_value_t *val = hostapd_ucode_bss_get_uval(hapd);
+ 

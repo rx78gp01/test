@@ -1,0 +1,75 @@
+From 5416ae9a5d8a9a43e4e0172b11c381cd9ac88fe0 Mon Sep 17 00:00:00 2001
+From: Daniel Golle <daniel@makrotopia.org>
+Date: Fri, 17 Nov 2023 00:02:05 +0000
+Subject: [PATCH] base-files: add mmc_get_mac_ascii function
+
+Similar to the *_get_mac_binary function, also split the common parts
+off mtd_get_mac_ascii into new get_mac_ascii function and introduce
+mmc_get_mac_ascii which uses it.
+
+Signed-off-by: Daniel Golle <daniel@makrotopia.org>
+(cherry picked from commit 45c85c1827d45f8041b8f270d80bf6fff328069c)
+---
+ .../base-files/files/lib/functions/system.sh  | 30 +++++++++++++++----
+ 1 file changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/package/base-files/files/lib/functions/system.sh b/package/base-files/files/lib/functions/system.sh
+index d06354b01f45ef..107e67835a2b14 100644
+--- a/package/base-files/files/lib/functions/system.sh
++++ b/package/base-files/files/lib/functions/system.sh
+@@ -61,11 +61,21 @@ find_mtd_chardev() {
+ 	echo "${INDEX:+$PREFIX$INDEX}"
+ }
+ 
++get_mac_ascii() {
++	local part="$1"
++	local key="$2"
++	local mac_dirty
++
++	mac_dirty=$(strings "$part" | sed -n 's/^'"$key"'=//p')
++
++	# "canonicalize" mac
++	[ -n "$mac_dirty" ] && macaddr_canonicalize "$mac_dirty"
++}
++
+ mtd_get_mac_ascii() {
+ 	local mtdname="$1"
+ 	local key="$2"
+ 	local part
+-	local mac_dirty
+ 
+ 	part=$(find_mtd_part "$mtdname")
+ 	if [ -z "$part" ]; then
+@@ -73,10 +83,7 @@ mtd_get_mac_ascii() {
+ 		return
+ 	fi
+ 
+-	mac_dirty=$(strings "$part" | sed -n 's/^'"$key"'=//p')
+-
+-	# "canonicalize" mac
+-	[ -n "$mac_dirty" ] && macaddr_canonicalize "$mac_dirty"
++	get_mac_ascii "$part" "$key"
+ }
+ 
+ mtd_get_mac_encrypted_arcadyan() {
+@@ -190,6 +197,20 @@ mtd_get_part_size() {
+ 	done < /proc/mtd
+ }
+ 
++mmc_get_mac_ascii() {
++	local part_name="$1"
++	local key="$2"
++	local part
++
++	part=$(find_mmc_part "$part_name")
++	if [ -z "$part" ]; then
++		echo "mmc_get_mac_ascii: partition $part_name not found!" >&2
++		return
++	fi
++
++	get_mac_ascii "$part" "$key"
++}
++
+ mmc_get_mac_binary() {
+ 	local part_name="$1"
+ 	local offset="$2"

@@ -1,0 +1,43 @@
+From afb5fdd79a00a1737fb64d9e2420ffdeebff392f Mon Sep 17 00:00:00 2001
+From: Christian Marangi <ansuelsmth@gmail.com>
+Date: Thu, 18 Apr 2024 12:40:18 +0200
+Subject: [PATCH] netifd: packet-steering: silence error on applying queue mask
+
+Some queues can't be tweaked and return -ENOENT if it's not multiqueue.
+
+Silence any error from echo to produce a more clean bootlog.
+
+Fixes: #12095
+Suggested-by: Andris PE <neandris@gmail.com>
+Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
+---
+ package/network/config/netifd/Makefile                          | 2 +-
+ .../config/netifd/files/usr/libexec/network/packet-steering.sh  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/config/netifd/Makefile b/package/network/config/netifd/Makefile
+index b9f0e692d5386f..acfabf05e0e5a3 100644
+--- a/package/network/config/netifd/Makefile
++++ b/package/network/config/netifd/Makefile
+@@ -1,7 +1,7 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=netifd
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL=$(PROJECT_GIT)/project/netifd.git
+diff --git a/package/network/config/netifd/files/usr/libexec/network/packet-steering.sh b/package/network/config/netifd/files/usr/libexec/network/packet-steering.sh
+index 799c0808053f8d..51b9284449764f 100755
+--- a/package/network/config/netifd/files/usr/libexec/network/packet-steering.sh
++++ b/package/network/config/netifd/files/usr/libexec/network/packet-steering.sh
+@@ -29,7 +29,7 @@ set_hex_val() {
+ 	local val="$2"
+ 	val="$(printf %x "$val")"
+ 	[ -n "$DEBUG" ] && echo "$file = $val"
+-	echo "$val" > "$file"
++	echo "$val" > "$file" 2>/dev/null
+ }
+ 
+ packet_steering="$(uci get "network.@globals[0].packet_steering")"

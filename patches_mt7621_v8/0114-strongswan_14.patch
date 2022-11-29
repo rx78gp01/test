@@ -1,0 +1,38 @@
+From d95f6625e3fbb25f3f42401864268ae722a6c410 Mon Sep 17 00:00:00 2001
+From: Philip Prindeville <philipp@redfish-solutions.com>
+Date: Mon, 6 May 2024 14:14:55 -0600
+Subject: [PATCH] strongswan: Add missing declarations in swanctl
+
+Signed-off-by: Philip Prindeville <philipp@redfish-solutions.com>
+---
+ net/strongswan/Makefile           | 2 +-
+ net/strongswan/files/swanctl.init | 2 ++
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/feeds/packages/net/strongswan/Makefile b/feeds/packages/net/strongswan/Makefile
+index 2ff7c8ee3c2f4..82e890c8aa46c 100644
+--- a/feeds/packages/net/strongswan/Makefile
++++ b/feeds/packages/net/strongswan/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=strongswan
+ PKG_VERSION:=5.9.14
+-PKG_RELEASE:=2
++PKG_RELEASE:=3
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+ PKG_SOURCE_URL:=https://download.strongswan.org/ https://download2.strongswan.org/
+diff --git a/feeds/packages/net/strongswan/files/swanctl.init b/feeds/packages/net/strongswan/files/swanctl.init
+index abdbb1ffe185e..2469001595cd4 100644
+--- a/feeds/packages/net/strongswan/files/swanctl.init
++++ b/feeds/packages/net/strongswan/files/swanctl.init
+@@ -428,7 +428,9 @@ config_remote() {
+ 	local gateway
+ 	local local_sourceip
+ 	local local_ip
++	local local_identifier
+ 	local remote_gateway
++	local remote_identifier
+ 	local pre_shared_key
+ 	local auth_method
+ 	local keyingtries

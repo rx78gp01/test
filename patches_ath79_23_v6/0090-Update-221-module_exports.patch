@@ -1,0 +1,18 @@
+diff --git a/target/linux/generic/hack-5.15/221-module_exports.patch b/target/linux/generic/hack-5.15/221-module_exports.patch
+index 87f541b..8db0f7d 100644
+--- a/target/linux/generic/hack-5.15/221-module_exports.patch
++++ b/target/linux/generic/hack-5.15/221-module_exports.patch
+@@ -27,8 +27,8 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+ +#define SYMTAB_DISCARD_GPL
+ +#endif
+ +
+- /* Align . to a 8 byte boundary equals to maximum function alignment. */
+- #define ALIGN_FUNCTION()  . = ALIGN(8)
++ /* Align . function alignment. */
++ #define ALIGN_FUNCTION()  . = ALIGN(CONFIG_FUNCTION_ALIGNMENT)
+  
+ @@ -485,14 +495,14 @@
+  	/* Kernel symbol table: Normal symbols */			\
+-- 
+2.38.1.windows.1
+

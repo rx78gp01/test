@@ -1,0 +1,1473 @@
+From 9ba313d46f6e06b712ef67b1300fe8b61c958b61 Mon Sep 17 00:00:00 2001
+From: quarkysg <hhtan72@yahoo.com>
+Date: Tue, 27 Jul 2021 16:02:07 +0800
+Subject: [PATCH] shortcut-fe: QCA shortcut-fe fast-path driver
+
+---
+ package/qca/README.md                         |  11 +
+ .../qca/shortcut-fe/fast-classifier/Makefile  |  96 +++++
+ .../patches/100-kernel-5.4-support.patch      | 192 ++++++++++
+ .../patches/200-PBR-patch-and-bug-fixes.patch | 147 ++++++++
+ .../201-rework-nfct-notification.patch        |  44 +++
+ package/qca/shortcut-fe/shortcut-fe/Makefile  |  85 +++++
+ .../shortcut-fe/files/etc/init.d/shortcut-fe  |  48 +++
+ .../shortcut-fe/files/usr/bin/sfe_dump        |  35 ++
+ .../patches/100-kernel-5.4-support.patch      | 176 +++++++++
+ .../patches/200-fix-spinlock-bug.patch        |  84 +++++
+ .../201-rework-nfct-notification.patch        |  36 ++
+ .../qca/shortcut-fe/simulated-driver/Makefile |  57 +++
+ .../hack-5.4/999-01-shortcut-fe-support.patch | 347 ++++++++++++++++++
+ 13 files changed, 1358 insertions(+)
+ create mode 100644 package/qca/README.md
+ create mode 100644 package/qca/shortcut-fe/fast-classifier/Makefile
+ create mode 100644 package/qca/shortcut-fe/fast-classifier/patches/100-kernel-5.4-support.patch
+ create mode 100644 package/qca/shortcut-fe/fast-classifier/patches/200-PBR-patch-and-bug-fixes.patch
+ create mode 100644 package/qca/shortcut-fe/fast-classifier/patches/201-rework-nfct-notification.patch
+ create mode 100644 package/qca/shortcut-fe/shortcut-fe/Makefile
+ create mode 100644 package/qca/shortcut-fe/shortcut-fe/files/etc/init.d/shortcut-fe
+ create mode 100644 package/qca/shortcut-fe/shortcut-fe/files/usr/bin/sfe_dump
+ create mode 100644 package/qca/shortcut-fe/shortcut-fe/patches/100-kernel-5.4-support.patch
+ create mode 100644 package/qca/shortcut-fe/shortcut-fe/patches/200-fix-spinlock-bug.patch
+ create mode 100644 package/qca/shortcut-fe/shortcut-fe/patches/201-rework-nfct-notification.patch
+ create mode 100644 package/qca/shortcut-fe/simulated-driver/Makefile
+ create mode 100644 target/linux/generic/hack-5.4/999-01-shortcut-fe-support.patch
+
+diff --git a/package/kernel/qca/README.md b/package/kernel/qca/README.md
+new file mode 100644
+index 0000000000000..495d9b9205493
+--- /dev/null
++++ b/package/kernel/qca/README.md
+@@ -0,0 +1,11 @@
++QSDK NSS Drivers
++================
++
++This repo contains drivers required to activate and use the IPQ806x SoCs'
++NSS accelerator cores.
++
++The drivers are from the QSDK 11.2r1 release.  The entire QSDK 11.2r1 release
++can be found in the link below:
++
++https://source.codeaurora.org/quic/qsdk/releases/manifest/qstak/tree/caf_AU_LINUX_QSDK_NHSS.QSDK.11.2.R1_TARGET_ALL.12.0.4540.030.xml?h=release
++
+diff --git a/package/kernel/qca/shortcut-fe/fast-classifier/Makefile b/package/kernel/qca/shortcut-fe/fast-classifier/Makefile
+new file mode 100644
+index 0000000000000..1ab0a19e8862e
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/fast-classifier/Makefile
+@@ -0,0 +1,96 @@
++include $(TOPDIR)/rules.mk
++include $(INCLUDE_DIR)/kernel.mk
++
++PKG_NAME:=fast-classifier
++PKG_RELEASE:=1
++
++PKG_SOURCE_URL:=https://git.codelinaro.org/clo/qsdk/oss/lklm/shortcut-fe
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_VERSION:=c7dd8173b178affc9d8da22f51610243be994e1c
++
++include $(INCLUDE_DIR)/package.mk
++
++define KernelPackage/$(PKG_NAME)/Default
++  SECTION:=kernel
++  CATEGORY:=Kernel modules
++  SUBMENU:=Network Support
++  DEPENDS:=+kmod-ipt-conntrack +kmod-shortcut-fe
++  TITLE:=Kernel driver for FAST Classifier
++  FILES:=$(PKG_BUILD_DIR)/fast-classifier/fast-classifier.ko
++  KCONFIG:=CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y \
++	   CONFIG_NF_CONNTRACK_MARK=y
++  PROVIDES:=$(PKG_NAME)
++endef
++
++define KernelPackage/$(PKG_NAME)
++  $(call KernelPackage/$(PKG_NAME)/Default)
++endef
++
++define KernelPackage/$(PKG_NAME)-noload
++  $(call KernelPackage/$(PKG_NAME)/Default)
++endef
++
++define KernelPackage/$(PKG_NAME)/Default/description
++FAST Classifier talks to SFE to make decisions about offloading connections
++endef
++
++define KernelPackage/$(PKG_NAME)/description
++$(call KernelPackage/$(PKG_NAME)/Default/description)
++endef
++
++define KernelPackage/$(PKG_NAME)-noload/description
++$(call KernelPackage/$(PKG_NAME)/Default/description)
++
++This package does not load $(PKG_NAME) at boot by default
++endef
++
++define Package/fast-classifier-example
++  TITLE:=Example user space program for fast-classifier
++  DEPENDS:=+libnl +kmod-fast-classifier
++endef
++
++define Package/fast-classifier-example/description
++Example user space program that communicates with fast
++classifier kernel module
++endef
++
++SFE_MAKE_OPTS:=SFE_SUPPORT_IPV6=y
++
++define Build/Compile/kmod
++	$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" $(strip $(SFE_MAKE_OPTS)) \
++		CONFIG_FAST_CLASSIFIER=m \
++		$(KERNEL_MAKE_FLAGS) \
++		$(PKG_MAKE_FLAGS) \
++		M="$(PKG_BUILD_DIR)/fast-classifier" \
++		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
++		modules
++endef
++
++define Build/Compile/example
++	$(TARGET_CC) -o $(PKG_BUILD_DIR)/userspace_fast_classifier \
++		-I $(PKG_BUILD_DIR)/fast-classifier \
++		-I$(STAGING_DIR)/usr/include/libnl \
++		-I$(STAGING_DIR)/usr/include/libnl3 \
++		-lnl-genl-3 -lnl-3 \
++		$(PKG_BUILD_DIR)/fast-classifier/nl_classifier_test.c
++endef
++
++define Build/Compile
++	$(Build/Compile/kmod)
++	$(if $(CONFIG_PACKAGE_fast-classifier-example),$(Build/Compile/example))
++endef
++
++define Build/InstallDev
++	$(INSTALL_DIR) $(1)/usr/include
++	$(CP) $(PKG_BUILD_DIR)/fast-classifier/fast-classifier.h $(1)/usr/include/
++endef
++
++
++define Package/fast-classifier-example/install
++	$(INSTALL_DIR) $(1)/sbin
++	$(CP) $(PKG_BUILD_DIR)/userspace_fast_classifier $(1)/sbin/
++endef
++
++$(eval $(call KernelPackage,$(PKG_NAME)))
++$(eval $(call KernelPackage,$(PKG_NAME)-noload))
++$(eval $(call BuildPackage,fast-classifier-example))
+diff --git a/package/kernel/qca/shortcut-fe/fast-classifier/patches/100-kernel-5.4-support.patch b/package/kernel/qca/shortcut-fe/fast-classifier/patches/100-kernel-5.4-support.patch
+new file mode 100644
+index 0000000000000..ac5780825d733
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/fast-classifier/patches/100-kernel-5.4-support.patch
+@@ -0,0 +1,192 @@
++--- a/fast-classifier/fast-classifier.c
+++++ b/fast-classifier/fast-classifier.c
++@@ -111,27 +111,12 @@ struct fast_classifier {
++ 
++ static struct fast_classifier __sc;
++ 
++-static struct nla_policy fast_classifier_genl_policy[FAST_CLASSIFIER_A_MAX + 1] = {
++-	[FAST_CLASSIFIER_A_TUPLE] = {
++-		.type = NLA_UNSPEC,
++-		.len = sizeof(struct fast_classifier_tuple)
++-	},
++-};
++-
++ static struct genl_multicast_group fast_classifier_genl_mcgrp[] = {
++ 	{
++ 		.name = FAST_CLASSIFIER_GENL_MCGRP,
++ 	},
++ };
++ 
++-static struct genl_family fast_classifier_gnl_family = {
++-	.id = GENL_ID_GENERATE,
++-	.hdrsize = FAST_CLASSIFIER_GENL_HDRSIZE,
++-	.name = FAST_CLASSIFIER_GENL_NAME,
++-	.version = FAST_CLASSIFIER_GENL_VERSION,
++-	.maxattr = FAST_CLASSIFIER_A_MAX,
++-};
++-
++ static int fast_classifier_offload_genl_msg(struct sk_buff *skb, struct genl_info *info);
++ static int fast_classifier_nl_genl_msg_DUMP(struct sk_buff *skb, struct netlink_callback *cb);
++ 
++@@ -139,26 +124,35 @@ static struct genl_ops fast_classifier_g
++ 	{
++ 		.cmd = FAST_CLASSIFIER_C_OFFLOAD,
++ 		.flags = 0,
++-		.policy = fast_classifier_genl_policy,
++ 		.doit = fast_classifier_offload_genl_msg,
++ 		.dumpit = NULL,
++ 	},
++ 	{
++ 		.cmd = FAST_CLASSIFIER_C_OFFLOADED,
++ 		.flags = 0,
++-		.policy = fast_classifier_genl_policy,
++ 		.doit = NULL,
++ 		.dumpit = fast_classifier_nl_genl_msg_DUMP,
++ 	},
++ 	{
++ 		.cmd = FAST_CLASSIFIER_C_DONE,
++ 		.flags = 0,
++-		.policy = fast_classifier_genl_policy,
++ 		.doit = NULL,
++ 		.dumpit = fast_classifier_nl_genl_msg_DUMP,
++ 	},
++ };
++ 
+++static struct genl_family fast_classifier_gnl_family = {
+++	.hdrsize = FAST_CLASSIFIER_GENL_HDRSIZE,
+++	.name = FAST_CLASSIFIER_GENL_NAME,
+++	.version = FAST_CLASSIFIER_GENL_VERSION,
+++	.maxattr = FAST_CLASSIFIER_A_MAX,
+++	.ops = fast_classifier_gnl_ops,
+++	.n_ops = ARRAY_SIZE(fast_classifier_gnl_ops),
+++	.mcgrps = fast_classifier_genl_mcgrp,
+++	.n_mcgrps = ARRAY_SIZE(fast_classifier_genl_mcgrp),
+++};
+++
+++
++ static atomic_t offload_msgs = ATOMIC_INIT(0);
++ static atomic_t offload_no_match_msgs = ATOMIC_INIT(0);
++ static atomic_t offloaded_msgs = ATOMIC_INIT(0);
++@@ -320,7 +314,7 @@ static bool fast_classifier_find_dev_and
++ 
++ 		dst = (struct dst_entry *)rt;
++ 	} else {
++-		rt6 = rt6_lookup(&init_net, (struct in6_addr *)addr->ip6, 0, 0, 0);
+++		rt6 = rt6_lookup(&init_net, (struct in6_addr *)addr->ip6, 0, 0, NULL, 0);
++ 		if (!rt6) {
++ 			goto ret_fail;
++ 		}
++@@ -821,15 +815,6 @@ static unsigned int fast_classifier_post
++ 	}
++ 
++ 	/*
++-	 * Don't process untracked connections.
++-	 */
++-	if (unlikely(nf_ct_is_untracked(ct))) {
++-		fast_classifier_incr_exceptions(FAST_CL_EXCEPTION_CT_NO_TRACK);
++-		DEBUG_TRACE("untracked connection\n");
++-		return NF_ACCEPT;
++-	}
++-
++-	/*
++ 	 * Unconfirmed connection may be dropped by Linux at the final step,
++ 	 * So we don't process unconfirmed connections.
++ 	 */
++@@ -1214,14 +1199,6 @@ static int fast_classifier_conntrack_eve
++ 		return NOTIFY_DONE;
++ 	}
++ 
++-	/*
++-	 * If this is an untracked connection then we can't have any state either.
++-	 */
++-	if (unlikely(nf_ct_is_untracked(ct))) {
++-		DEBUG_TRACE("ignoring untracked conn\n");
++-		return NOTIFY_DONE;
++-	}
++-
++ 	orig_tuple = ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
++ 	sid.protocol = (s32)orig_tuple.dst.protonum;
++ 
++@@ -1437,14 +1414,13 @@ static void fast_classifier_sync_rule(st
++ 	}
++ 
++ 	ct = nf_ct_tuplehash_to_ctrack(h);
++-	NF_CT_ASSERT(ct->timeout.data == (unsigned long)ct);
++ 
++ 	/*
++ 	 * Only update if this is not a fixed timeout
++ 	 */
++ 	if (!test_bit(IPS_FIXED_TIMEOUT_BIT, &ct->status)) {
++ 		spin_lock_bh(&ct->lock);
++-		ct->timeout.expires += sis->delta_jiffies;
+++		ct->timeout += sis->delta_jiffies;
++ 		spin_unlock_bh(&ct->lock);
++ 	}
++ 
++@@ -1734,7 +1710,8 @@ static int __init fast_classifier_init(v
++ 	/*
++ 	 * Register our netfilter hooks.
++ 	 */
++-	result = nf_register_hooks(fast_classifier_ops_post_routing, ARRAY_SIZE(fast_classifier_ops_post_routing));
+++	result = nf_register_net_hooks(&init_net, fast_classifier_ops_post_routing, \
+++				       ARRAY_SIZE(fast_classifier_ops_post_routing));
++ 	if (result < 0) {
++ 		DEBUG_ERROR("can't register nf post routing hook: %d\n", result);
++ 		goto exit3;
++@@ -1751,35 +1728,12 @@ static int __init fast_classifier_init(v
++ 	}
++ #endif
++ 
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 13, 0))
++-	result = genl_register_family_with_ops_groups(&fast_classifier_gnl_family,
++-						      fast_classifier_gnl_ops,
++-						      fast_classifier_genl_mcgrp);
++-	if (result) {
++-		DEBUG_ERROR("failed to register genl ops: %d\n", result);
++-		goto exit5;
++-	}
++-#else
++ 	result = genl_register_family(&fast_classifier_gnl_family);
++ 	if (result) {
++-		printk(KERN_CRIT "unable to register genl family\n");
+++		DEBUG_ERROR("failed to register genl family: %d\n", result);
++ 		goto exit5;
++ 	}
++ 
++-	result = genl_register_ops(&fast_classifier_gnl_family, fast_classifier_gnl_ops);
++-	if (result) {
++-		printk(KERN_CRIT "unable to register ops\n");
++-		goto exit6;
++-	}
++-
++-	result = genl_register_mc_group(&fast_classifier_gnl_family,
++-					fast_classifier_genl_mcgrp);
++-	if (result) {
++-		printk(KERN_CRIT "unable to register multicast group\n");
++-		goto exit6;
++-	}
++-#endif
++-
++ 	printk(KERN_ALERT "fast-classifier: registered\n");
++ 
++ 	spin_lock_init(&sc->lock);
++@@ -1808,7 +1762,8 @@ exit5:
++ 
++ exit4:
++ #endif
++-	nf_unregister_hooks(fast_classifier_ops_post_routing, ARRAY_SIZE(fast_classifier_ops_post_routing));
+++	nf_unregister_net_hooks(&init_net, fast_classifier_ops_post_routing, \
+++				ARRAY_SIZE(fast_classifier_ops_post_routing));
++ 
++ exit3:
++ 	unregister_inetaddr_notifier(&sc->inet_notifier);
++@@ -1875,7 +1830,8 @@ static void __exit fast_classifier_exit(
++ 	nf_conntrack_unregister_notifier(&init_net, &fast_classifier_conntrack_notifier);
++ 
++ #endif
++-	nf_unregister_hooks(fast_classifier_ops_post_routing, ARRAY_SIZE(fast_classifier_ops_post_routing));
+++	nf_unregister_net_hooks(&init_net, fast_classifier_ops_post_routing, \
+++				ARRAY_SIZE(fast_classifier_ops_post_routing));
++ 
++ 	unregister_inet6addr_notifier(&sc->inet6_notifier);
++ 	unregister_inetaddr_notifier(&sc->inet_notifier);
+diff --git a/package/kernel/qca/shortcut-fe/fast-classifier/patches/200-PBR-patch-and-bug-fixes.patch b/package/kernel/qca/shortcut-fe/fast-classifier/patches/200-PBR-patch-and-bug-fixes.patch
+new file mode 100644
+index 0000000000000..9b564f0e27e8a
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/fast-classifier/patches/200-PBR-patch-and-bug-fixes.patch
+@@ -0,0 +1,147 @@
++--- a/fast-classifier/fast-classifier.c
+++++ b/fast-classifier/fast-classifier.c
++@@ -293,7 +293,7 @@ rx_exit:
++  * structure, obtain the hardware address.  This means this function also
++  * works if the neighbours are routers too.
++  */
++-static bool fast_classifier_find_dev_and_mac_addr(sfe_ip_addr_t *addr, struct net_device **dev, u8 *mac_addr, bool is_v4)
+++static bool fast_classifier_find_dev_and_mac_addr(struct sk_buff *skb, sfe_ip_addr_t *addr, struct net_device **dev, u8 *mac_addr, bool is_v4)
++ {
++ 	struct neighbour *neigh;
++ 	struct rtable *rt;
++@@ -302,6 +302,15 @@ static bool fast_classifier_find_dev_and
++ 	struct net_device *mac_dev;
++ 
++ 	/*
+++	 * If we have skb provided, use it as the original code is unable
+++	 * to lookup routes that are policy routed.
+++	*/
+++	if (unlikely(skb)) {
+++		dst = skb_dst(skb);
+++		goto skip_dst_lookup;
+++	}
+++
+++	/*
++ 	 * Look up the rtable entry for the IP address then get the hardware
++ 	 * address from its neighbour structure.  This means this works when the
++ 	 * neighbours are routers too.
++@@ -322,18 +331,21 @@ static bool fast_classifier_find_dev_and
++ 		dst = (struct dst_entry *)rt6;
++ 	}
++ 
+++skip_dst_lookup:
++ 	rcu_read_lock();
++ 	neigh = sfe_dst_get_neighbour(dst, addr);
++ 	if (unlikely(!neigh)) {
++ 		rcu_read_unlock();
++-		dst_release(dst);
+++		if (likely(!skb))
+++			dst_release(dst);
++ 		goto ret_fail;
++ 	}
++ 
++ 	if (unlikely(!(neigh->nud_state & NUD_VALID))) {
++ 		rcu_read_unlock();
++ 		neigh_release(neigh);
++-		dst_release(dst);
+++		if (likely(!skb))
+++			dst_release(dst);
++ 		goto ret_fail;
++ 	}
++ 
++@@ -341,7 +353,8 @@ static bool fast_classifier_find_dev_and
++ 	if (!mac_dev) {
++ 		rcu_read_unlock();
++ 		neigh_release(neigh);
++-		dst_release(dst);
+++		if (likely(!skb))
+++			dst_release(dst);
++ 		goto ret_fail;
++ 	}
++ 
++@@ -351,7 +364,8 @@ static bool fast_classifier_find_dev_and
++ 	*dev = mac_dev;
++ 	rcu_read_unlock();
++ 	neigh_release(neigh);
++-	dst_release(dst);
+++	if (likely(!skb))
+++		dst_release(dst);
++ 
++ 	return true;
++ 
++@@ -777,6 +791,7 @@ static unsigned int fast_classifier_post
++ 	struct nf_conntrack_tuple orig_tuple;
++ 	struct nf_conntrack_tuple reply_tuple;
++ 	struct sfe_connection *conn;
+++	struct sk_buff *tmp_skb = NULL;
++ 
++ 	/*
++ 	 * Don't process broadcast or multicast packets.
++@@ -926,6 +941,21 @@ static unsigned int fast_classifier_post
++ 		sic.dest_port = orig_tuple.dst.u.udp.port;
++ 		sic.src_port_xlate = reply_tuple.dst.u.udp.port;
++ 		sic.dest_port_xlate = reply_tuple.src.u.udp.port;
+++
+++		/*
+++		 * Somehow, SFE is not playing nice with IPSec traffic.
+++		 * Do not accelerate for now.
+++		 */
+++		if (ntohs(sic.dest_port) == 4500 || ntohs(sic.dest_port) == 500) {
+++			if (likely(is_v4))
+++				DEBUG_TRACE("IPsec bypass: %pI4:%d(%pI4:%d) to %pI4:%d(%pI4:%d)\n",
+++					&sic.src_ip.ip, ntohs(sic.src_port), &sic.src_ip_xlate.ip, ntohs(sic.src_port_xlate),
+++					&sic.dest_ip.ip, ntohs(sic.dest_port), &sic.dest_ip_xlate.ip, ntohs(sic.dest_port_xlate));
+++			else
+++				DEBUG_TRACE("IPsec bypass: %pI6:%d to %pI6:%d\n",
+++					&sic.src_ip.ip6, ntohs(sic.src_port), &sic.dest_ip.ip6, ntohs(sic.dest_port));
+++			return NF_ACCEPT;
+++		}
++ 		break;
++ 
++ 	default:
++@@ -1023,25 +1053,29 @@ static unsigned int fast_classifier_post
++ 	 * Get the net device and MAC addresses that correspond to the various source and
++ 	 * destination host addresses.
++ 	 */
++-	if (!fast_classifier_find_dev_and_mac_addr(&sic.src_ip, &src_dev_tmp, sic.src_mac, is_v4)) {
+++	if (!fast_classifier_find_dev_and_mac_addr(NULL, &sic.src_ip, &src_dev_tmp, sic.src_mac, is_v4)) {
++ 		fast_classifier_incr_exceptions(FAST_CL_EXCEPTION_NO_SRC_DEV);
++ 		return NF_ACCEPT;
++ 	}
++ 	src_dev = src_dev_tmp;
++ 
++-	if (!fast_classifier_find_dev_and_mac_addr(&sic.src_ip_xlate, &dev, sic.src_mac_xlate, is_v4)) {
+++	if (!fast_classifier_find_dev_and_mac_addr(NULL, &sic.src_ip_xlate, &dev, sic.src_mac_xlate, is_v4)) {
++ 		fast_classifier_incr_exceptions(FAST_CL_EXCEPTION_NO_SRC_XLATE_DEV);
++ 		goto done1;
++ 	}
++ 	dev_put(dev);
++ 
++-	if (!fast_classifier_find_dev_and_mac_addr(&sic.dest_ip, &dev, sic.dest_mac, is_v4)) {
+++	/* Somehow, for IPv6, we need this workaround as well */
+++	if (unlikely(!is_v4))
+++		tmp_skb = skb;
+++
+++	if (!fast_classifier_find_dev_and_mac_addr(tmp_skb, &sic.dest_ip, &dev, sic.dest_mac, is_v4)) {
++ 		fast_classifier_incr_exceptions(FAST_CL_EXCEPTION_NO_DEST_DEV);
++ 		goto done1;
++ 	}
++ 	dev_put(dev);
++ 
++-	if (!fast_classifier_find_dev_and_mac_addr(&sic.dest_ip_xlate, &dest_dev_tmp, sic.dest_mac_xlate, is_v4)) {
+++	if (!fast_classifier_find_dev_and_mac_addr(skb, &sic.dest_ip_xlate, &dest_dev_tmp, sic.dest_mac_xlate, is_v4)) {
++ 		fast_classifier_incr_exceptions(FAST_CL_EXCEPTION_NO_DEST_XLATE_DEV);
++ 		goto done1;
++ 	}
++@@ -1568,9 +1602,9 @@ static ssize_t fast_classifier_get_debug
++ 				conn->sic->protocol,
++ 				conn->sic->src_mac,
++ 				&conn->sic->src_ip,
++-				conn->sic->src_port,
+++				ntohs(conn->sic->src_port),
++ 				&conn->sic->dest_ip,
++-				conn->sic->dest_port,
+++				ntohs(conn->sic->dest_port),
++ 				conn->sic->dest_mac_xlate,
++ 				conn->sic->mark,
++ 				conn->hits);
+diff --git a/package/kernel/qca/shortcut-fe/fast-classifier/patches/201-rework-nfct-notification.patch b/package/kernel/qca/shortcut-fe/fast-classifier/patches/201-rework-nfct-notification.patch
+new file mode 100644
+index 0000000000000..81d6af7605018
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/fast-classifier/patches/201-rework-nfct-notification.patch
+@@ -0,0 +1,44 @@
++--- a/fast-classifier/fast-classifier.c
+++++ b/fast-classifier/fast-classifier.c
++@@ -1755,7 +1755,11 @@ static int __init fast_classifier_init(v
++ 	/*
++ 	 * Register a notifier hook to get fast notifications of expired connections.
++ 	 */
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	result = nf_conntrack_register_chain_notifier(&init_net, &fast_classifier_conntrack_notifier);
+++#else
++ 	result = nf_conntrack_register_notifier(&init_net, &fast_classifier_conntrack_notifier);
+++#endif
++ 	if (result < 0) {
++ 		DEBUG_ERROR("can't register nf notifier hook: %d\n", result);
++ 		goto exit4;
++@@ -1792,7 +1796,11 @@ exit6:
++ 
++ exit5:
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	nf_conntrack_unregister_chain_notifier(&init_net, &fast_classifier_conntrack_notifier);
+++#else
++ 	nf_conntrack_unregister_notifier(&init_net, &fast_classifier_conntrack_notifier);
+++#endif
++ 
++ exit4:
++ #endif
++@@ -1857,12 +1861,15 @@ static void __exit fast_classifier_exit(
++ 
++ 	result = genl_unregister_family(&fast_classifier_gnl_family);
++ 	if (result != 0) {
++-		printk(KERN_CRIT "Unable to unreigster genl_family\n");
+++		printk(KERN_CRIT "Unable to unregister genl_family\n");
++ 	}
++ 
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	nf_conntrack_unregister_chain_notifier(&init_net, &fast_classifier_conntrack_notifier);
+++#else
++ 	nf_conntrack_unregister_notifier(&init_net, &fast_classifier_conntrack_notifier);
++-
+++#endif
++ #endif
++ 	nf_unregister_net_hooks(&init_net, fast_classifier_ops_post_routing, \
++ 				ARRAY_SIZE(fast_classifier_ops_post_routing));
+diff --git a/package/kernel/qca/shortcut-fe/shortcut-fe/Makefile b/package/kernel/qca/shortcut-fe/shortcut-fe/Makefile
+new file mode 100644
+index 0000000000000..da964ae0ea1e1
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/shortcut-fe/Makefile
+@@ -0,0 +1,85 @@
++#
++# Copyright (c) 2014 The Linux Foundation. All rights reserved.
++# Permission to use, copy, modify, and/or distribute this software for
++# any purpose with or without fee is hereby granted, provided that the
++# above copyright notice and this permission notice appear in all copies.
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
++# OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++include $(TOPDIR)/rules.mk
++include $(INCLUDE_DIR)/kernel.mk
++
++PKG_NAME:=shortcut-fe
++PKG_RELEASE:=1
++
++PKG_SOURCE_URL:=https://git.codelinaro.org/clo/qsdk/oss/lklm/shortcut-fe
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_VERSION:=c7dd8173b178affc9d8da22f51610243be994e1c
++
++include $(INCLUDE_DIR)/package.mk
++
++define KernelPackage/shortcut-fe
++  SECTION:=kernel
++  CATEGORY:=Kernel modules
++  SUBMENU:=Network Support
++  DEPENDS:=
++  TITLE:=Kernel driver for SFE
++  FILES:=$(PKG_BUILD_DIR)/shortcut-fe/shortcut-fe.ko $(PKG_BUILD_DIR)/shortcut-fe/shortcut-fe-ipv6.ko
++  KCONFIG:=CONFIG_NF_CONNTRACK_EVENTS=y \
++	   CONFIG_NF_CONNTRACK_TIMEOUT=y \
++	   CONFIG_SHORTCUT_FE=y \
++	   CONFIG_XFRM=y
++  AUTOLOAD:=$(call AutoLoad,09,shortcut-fe shortcut-fe-ipv6)
++endef
++
++define KernelPackage/shortcut-fe/Description
++Shortcut is an in-Linux-kernel IP packet forwarding engine.
++endef
++
++define KernelPackage/shortcut-fe/install
++	$(INSTALL_DIR) $(1)/etc/init.d
++	$(INSTALL_BIN) ./files/etc/init.d/shortcut-fe $(1)/etc/init.d
++	$(INSTALL_DIR) $(1)/usr/bin
++	$(INSTALL_BIN) ./files/usr/bin/sfe_dump $(1)/usr/bin
++endef
++
++define KernelPackage/shortcut-fe-cm
++  SECTION:=kernel
++  CATEGORY:=Kernel modules
++  SUBMENU:=Network Support
++  DEPENDS:=+kmod-ipt-conntrack +kmod-shortcut-fe
++  TITLE:=Kernel driver for SFE
++  FILES:=$(PKG_BUILD_DIR)/shortcut-fe/shortcut-fe-cm.ko
++  KCONFIG:=CONFIG_NF_CONNTRACK_CHAIN_EVENTS=y
++endef
++
++define KernelPackage/shortcut-fe-cm/Description
++Simple connection manager for the Shortcut forwarding engine.
++endef
++
++EXTRA_CFLAGS+=-DSFE_SUPPORT_IPV6
++
++define Build/Compile
++	$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
++		$(KERNEL_MAKE_FLAGS) \
++		$(PKG_MAKE_FLAGS) \
++		M="$(PKG_BUILD_DIR)/shortcut-fe" \
++		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
++		SFE_SUPPORT_IPV6=1 \
++		modules
++endef
++
++ifneq ($(CONFIG_PACKAGE_kmod-shortcut-fe)$(CONFIG_PACKAGE_kmod-shortcut-fe-cm),)
++define Build/InstallDev
++	$(INSTALL_DIR) $(1)/usr/include/shortcut-fe
++	$(CP) -rf $(PKG_BUILD_DIR)/shortcut-fe/sfe.h $(1)/usr/include/shortcut-fe
++endef
++endif
++
++$(eval $(call KernelPackage,shortcut-fe))
++$(eval $(call KernelPackage,shortcut-fe-cm))
+diff --git a/package/kernel/qca/shortcut-fe/shortcut-fe/files/etc/init.d/shortcut-fe b/package/kernel/qca/shortcut-fe/shortcut-fe/files/etc/init.d/shortcut-fe
+new file mode 100644
+index 0000000000000..3d68c35a310bc
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/shortcut-fe/files/etc/init.d/shortcut-fe
+@@ -0,0 +1,51 @@
++#!/bin/sh /etc/rc.common
++#
++# Copyright (c) 2014-2015 The Linux Foundation. All rights reserved.
++# Permission to use, copy, modify, and/or distribute this software for
++# any purpose with or without fee is hereby granted, provided that the
++# above copyright notice and this permission notice appear in all copies.
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
++# OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++
++#SFE connection manager has a lower priority, it should be started after other connection manager
++#to detect the existence of connection manager with higher priority
++START=72
++
++have_cm() {
++	[ -d /sys/kernel/debug/ecm ] && echo 1 && return
++
++	echo 0
++}
++
++#load shortcut-fe connection manager
++load_sfe() {
++	local kernel_version=$(uname -r)
++	sysctl -w net.netfilter.nf_conntrack_tcp_no_window_check=1
++#	[ -d /sys/module/shortcut_fe_drv ] && rmmod shortcut_fe_drv
++	[ ! -d /sys/module/shortcut_fe ] && insmod /lib/modules/$kernel_version/shortcut-fe.ko
++	[ ! -d /sys/module/shortcut_fe_ipv6 ] && insmod /lib/modules/$kernel_version/shortcut-fe-ipv6.ko
++	[ ! -d /sys/module/fast_classifier ] && [ -d /sys/module/shortcut_fe_cm ] || insmod /lib/modules/$kernel_version/fast-classifier.ko
++#	[ ! -d /sys/module/shortcut_fe_cm ] && [ -d /sys/module/fast_classifier ] || insmod /lib/modules/$kernel_version/shortcut-fe-cm.ko
++
++	echo 4 > /sys/fast_classifier/offload_at_pkts
++	echo 1 > /sys/fast_classifier/skip_to_bridge_ingress
++}
++
++start() {
++	[ "$(have_cm)" = "0" ] && load_sfe
++}
++
++stop() {
++	[ -d /sys/module/fast_classifier ] && rmmod fast_classifier
++#	[ -d /sys/module/shortcut_fe_cm ] && rmmod shortcut_fe_cm
++	[ -d /sys/module/shortcut_fe_ipv6 ] && rmmod shortcut_fe_ipv6
++	[ -d /sys/module/shortcut_fe ] && rmmod shortcut_fe
++#	[ -d /sys/module/shortcut_fe_drv ] && rmmod shortcut_fe_drv
++	sysctl -w net.netfilter.nf_conntrack_tcp_no_window_check=0
++}
+diff --git a/package/kernel/qca/shortcut-fe/shortcut-fe/files/usr/bin/sfe_dump b/package/kernel/qca/shortcut-fe/shortcut-fe/files/usr/bin/sfe_dump
+new file mode 100644
+index 0000000000000..2a224e0ca147a
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/shortcut-fe/files/usr/bin/sfe_dump
+@@ -0,0 +1,35 @@
++#!/bin/sh
++#
++# Copyright (c) 2015 The Linux Foundation. All rights reserved.
++# Permission to use, copy, modify, and/or distribute this software for
++# any purpose with or without fee is hereby granted, provided that the
++# above copyright notice and this permission notice appear in all copies.
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
++# OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++
++#@sfe_dump
++#@example : sfe_dump (ipv4|ipv6)
++sfe_dump(){
++	[ -e "/dev/sfe_ipv4" ] || {
++		dev_num=$(cat /sys/sfe_ipv4/debug_dev)
++		mknod /dev/sfe_ipv4 c $dev_num 0
++	}
++	[ -e "/dev/sfe_ipv6" ] || {
++		dev_num=$(cat /sys/sfe_ipv6/debug_dev)
++		mknod /dev/sfe_ipv6 c $dev_num 0
++	}
++	cat /dev/sfe_$1
++}
++
++if [ -z "$1" ]; then
++	sfe_dump ipv4
++	sfe_dump ipv6
++else
++	sfe_dump $1
++fi
+diff --git a/package/kernel/qca/shortcut-fe/shortcut-fe/patches/100-kernel-5.4-support.patch b/package/kernel/qca/shortcut-fe/shortcut-fe/patches/100-kernel-5.4-support.patch
+new file mode 100644
+index 0000000000000..3e6d0ba7140b7
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/shortcut-fe/patches/100-kernel-5.4-support.patch
+@@ -0,0 +1,176 @@
++--- a/shortcut-fe/sfe_backport.h
+++++ b/shortcut-fe/sfe_backport.h
++@@ -180,7 +180,7 @@ static inline struct net_device *sfe_dev
++ #endif
++ 
++ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0))
++-#define sfe_dst_get_neighbour(dst, daddr) dst_neigh_lookup(dst, addr)
+++#define sfe_dst_get_neighbour(dst, daddr) dst_neigh_lookup(dst, daddr)
++ #else
++ static inline struct neighbour *
++ sfe_dst_get_neighbour(struct dst_entry *dst, void *daddr)
++--- a/shortcut-fe/sfe_cm.c
+++++ b/shortcut-fe/sfe_cm.c
++@@ -219,7 +219,7 @@ static bool sfe_cm_find_dev_and_mac_addr
++ 
++ 		dst = (struct dst_entry *)rt;
++ 	} else {
++-		rt6 = rt6_lookup(&init_net, (struct in6_addr *)addr->ip6, 0, 0, 0);
+++		rt6 = rt6_lookup(&init_net, (struct in6_addr *)addr->ip6, 0, 0, NULL, 0);
++ 		if (!rt6) {
++ 			goto ret_fail;
++ 		}
++@@ -348,15 +348,6 @@ static unsigned int sfe_cm_post_routing(
++ 	}
++ 
++ 	/*
++-	 * Don't process untracked connections.
++-	 */
++-	if (unlikely(nf_ct_is_untracked(ct))) {
++-		sfe_cm_incr_exceptions(SFE_CM_EXCEPTION_CT_NO_TRACK);
++-		DEBUG_TRACE("untracked connection\n");
++-		return NF_ACCEPT;
++-	}
++-
++-	/*
++ 	 * Unconfirmed connection may be dropped by Linux at the final step,
++ 	 * So we don't process unconfirmed connections.
++ 	 */
++@@ -526,7 +517,7 @@ static unsigned int sfe_cm_post_routing(
++ 	 * For packets de-capsulated from xfrm, we still can accelerate it
++ 	 * on the direction we just received the packet.
++ 	 */
++-	if (unlikely(skb->sp)) {
+++	if (unlikely(skb_ext_exist(skb, SKB_EXT_SEC_PATH))) {
++ 		if (sic.protocol == IPPROTO_TCP &&
++ 		    !(sic.flags & SFE_CREATE_FLAG_NO_SEQ_CHECK)) {
++ 			return NF_ACCEPT;
++@@ -677,14 +668,6 @@ static int sfe_cm_conntrack_event(unsign
++ 	}
++ 
++ 	/*
++-	 * If this is an untracked connection then we can't have any state either.
++-	 */
++-	if (unlikely(nf_ct_is_untracked(ct))) {
++-		DEBUG_TRACE("ignoring untracked conn\n");
++-		return NOTIFY_DONE;
++-	}
++-
++-	/*
++ 	 * We're only interested in destroy events.
++ 	 */
++ 	if (unlikely(!(events & (1 << IPCT_DESTROY)))) {
++@@ -810,14 +793,13 @@ static void sfe_cm_sync_rule(struct sfe_
++ 	}
++ 
++ 	ct = nf_ct_tuplehash_to_ctrack(h);
++-	NF_CT_ASSERT(ct->timeout.data == (unsigned long)ct);
++ 
++ 	/*
++ 	 * Only update if this is not a fixed timeout
++ 	 */
++ 	if (!test_bit(IPS_FIXED_TIMEOUT_BIT, &ct->status)) {
++ 		spin_lock_bh(&ct->lock);
++-		ct->timeout.expires += sis->delta_jiffies;
+++		ct->timeout += sis->delta_jiffies;
++ 		spin_unlock_bh(&ct->lock);
++ 	}
++ 
++@@ -871,17 +853,15 @@ static void sfe_cm_sync_rule(struct sfe_
++ 			u_int64_t reply_pkts = atomic64_read(&SFE_ACCT_COUNTER(acct)[IP_CT_DIR_REPLY].packets);
++ 
++ 			if (reply_pkts != 0) {
++-				struct nf_conntrack_l4proto *l4proto;
++ 				unsigned int *timeouts;
++ 
++ 				set_bit(IPS_SEEN_REPLY_BIT, &ct->status);
++ 				set_bit(IPS_ASSURED_BIT, &ct->status);
++ 
++-				l4proto = __nf_ct_l4proto_find((sis->is_v6 ? AF_INET6 : AF_INET), IPPROTO_UDP);
++-				timeouts = nf_ct_timeout_lookup(&init_net, ct, l4proto);
+++				timeouts = nf_ct_timeout_lookup(ct);
++ 
++ 				spin_lock_bh(&ct->lock);
++-				ct->timeout.expires = jiffies + timeouts[UDP_CT_REPLIED];
+++				ct->timeout = jiffies + timeouts[UDP_CT_REPLIED];
++ 				spin_unlock_bh(&ct->lock);
++ 			}
++ 		}
++@@ -1008,7 +988,8 @@ static int __init sfe_cm_init(void)
++ 	/*
++ 	 * Register our netfilter hooks.
++ 	 */
++-	result = nf_register_hooks(sfe_cm_ops_post_routing, ARRAY_SIZE(sfe_cm_ops_post_routing));
+++	result = nf_register_net_hooks(&init_net, sfe_cm_ops_post_routing, \
+++				       ARRAY_SIZE(sfe_cm_ops_post_routing));
++ 	if (result < 0) {
++ 		DEBUG_ERROR("can't register nf post routing hook: %d\n", result);
++ 		goto exit3;
++@@ -1049,7 +1030,8 @@ static int __init sfe_cm_init(void)
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
++ #ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++ exit4:
++-	nf_unregister_hooks(sfe_cm_ops_post_routing, ARRAY_SIZE(sfe_cm_ops_post_routing));
+++	nf_unregister_net_hooks(&init_net, sfe_cm_ops_post_routing, \
+++				ARRAY_SIZE(sfe_cm_ops_post_routing));
++ #endif
++ #endif
++ exit3:
++@@ -1098,7 +1080,8 @@ static void __exit sfe_cm_exit(void)
++ 	nf_conntrack_unregister_notifier(&init_net, &sfe_cm_conntrack_notifier);
++ 
++ #endif
++-	nf_unregister_hooks(sfe_cm_ops_post_routing, ARRAY_SIZE(sfe_cm_ops_post_routing));
+++	nf_unregister_net_hooks(&init_net, sfe_cm_ops_post_routing, \
+++				ARRAY_SIZE(sfe_cm_ops_post_routing));
++ 
++ 	unregister_inet6addr_notifier(&sc->inet6_notifier);
++ 	unregister_inetaddr_notifier(&sc->inet_notifier);
++--- a/shortcut-fe/sfe_ipv4.c
+++++ b/shortcut-fe/sfe_ipv4.c
++@@ -2847,9 +2847,9 @@ another_round:
++ /*
++  * sfe_ipv4_periodic_sync()
++  */
++-static void sfe_ipv4_periodic_sync(unsigned long arg)
+++static void sfe_ipv4_periodic_sync(struct timer_list *arg)
++ {
++-	struct sfe_ipv4 *si = (struct sfe_ipv4 *)arg;
+++	struct sfe_ipv4 *si = (struct sfe_ipv4 *)arg->cust_data;
++ 	u64 now_jiffies;
++ 	int quota;
++ 	sfe_sync_rule_callback_t sync_rule_callback;
++@@ -3528,7 +3528,8 @@ static int __init sfe_ipv4_init(void)
++ 	/*
++ 	 * Create a timer to handle periodic statistics.
++ 	 */
++-	setup_timer(&si->timer, sfe_ipv4_periodic_sync, (unsigned long)si);
+++	timer_setup(&si->timer, sfe_ipv4_periodic_sync, 0);
+++	si->timer.cust_data = (unsigned long)si;
++ 	mod_timer(&si->timer, jiffies + ((HZ + 99) / 100));
++ 
++ 	spin_lock_init(&si->lock);
++--- a/shortcut-fe/sfe_ipv6.c
+++++ b/shortcut-fe/sfe_ipv6.c
++@@ -2855,9 +2855,9 @@ another_round:
++ /*
++  * sfe_ipv6_periodic_sync()
++  */
++-static void sfe_ipv6_periodic_sync(unsigned long arg)
+++static void sfe_ipv6_periodic_sync(struct timer_list *arg)
++ {
++-	struct sfe_ipv6 *si = (struct sfe_ipv6 *)arg;
+++	struct sfe_ipv6 *si = (struct sfe_ipv6 *)arg->cust_data;
++ 	u64 now_jiffies;
++ 	int quota;
++ 	sfe_sync_rule_callback_t sync_rule_callback;
++@@ -3536,7 +3536,8 @@ static int __init sfe_ipv6_init(void)
++ 	/*
++ 	 * Create a timer to handle periodic statistics.
++ 	 */
++-	setup_timer(&si->timer, sfe_ipv6_periodic_sync, (unsigned long)si);
+++	timer_setup(&si->timer, sfe_ipv6_periodic_sync, 0);
+++	si->timer.cust_data = (unsigned long)si;
++ 	mod_timer(&si->timer, jiffies + ((HZ + 99) / 100));
++ 
++ 	spin_lock_init(&si->lock);
+diff --git a/package/kernel/qca/shortcut-fe/shortcut-fe/patches/200-fix-spinlock-bug.patch b/package/kernel/qca/shortcut-fe/shortcut-fe/patches/200-fix-spinlock-bug.patch
+new file mode 100644
+index 0000000000000..d493631f41739
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/shortcut-fe/patches/200-fix-spinlock-bug.patch
+@@ -0,0 +1,84 @@
++--- a/shortcut-fe/sfe_ipv4.c
+++++ b/shortcut-fe/sfe_ipv4.c
++@@ -349,6 +349,7 @@ enum sfe_ipv4_exception_events {
++ 	SFE_IPV4_EXCEPTION_EVENT_DATAGRAM_INCOMPLETE,
++ 	SFE_IPV4_EXCEPTION_EVENT_IP_OPTIONS_INCOMPLETE,
++ 	SFE_IPV4_EXCEPTION_EVENT_UNHANDLED_PROTOCOL,
+++	SFE_IPV4_EXCEPTION_EVENT_CLONED_SKB_UNSHARE_ERROR,
++ 	SFE_IPV4_EXCEPTION_EVENT_LAST
++ };
++ 
++@@ -388,7 +389,8 @@ static char *sfe_ipv4_exception_events_s
++ 	"NON_INITIAL_FRAGMENT",
++ 	"DATAGRAM_INCOMPLETE",
++ 	"IP_OPTIONS_INCOMPLETE",
++-	"UNHANDLED_PROTOCOL"
+++	"UNHANDLED_PROTOCOL",
+++	"CLONED_SKB_UNSHARE_ERROR"
++ };
++ 
++ /*
++@@ -1312,6 +1314,10 @@ static int sfe_ipv4_recv_udp(struct sfe_
++ 		skb = skb_unshare(skb, GFP_ATOMIC);
++                 if (!skb) {
++ 			DEBUG_WARN("Failed to unshare the cloned skb\n");
+++			si->exception_events[SFE_IPV4_EXCEPTION_EVENT_CLONED_SKB_UNSHARE_ERROR]++;
+++			si->packets_not_forwarded++;
+++			spin_unlock_bh(&si->lock);
+++
++ 			return 0;
++ 		}
++ 
++@@ -1888,6 +1894,10 @@ static int sfe_ipv4_recv_tcp(struct sfe_
++ 		skb = skb_unshare(skb, GFP_ATOMIC);
++                 if (!skb) {
++ 			DEBUG_WARN("Failed to unshare the cloned skb\n");
+++			si->exception_events[SFE_IPV4_EXCEPTION_EVENT_CLONED_SKB_UNSHARE_ERROR]++;
+++			si->packets_not_forwarded++;
+++			spin_unlock_bh(&si->lock);
+++
++ 			return 0;
++ 		}
++ 
++--- a/shortcut-fe/sfe_ipv6.c
+++++ b/shortcut-fe/sfe_ipv6.c
++@@ -375,6 +375,7 @@ enum sfe_ipv6_exception_events {
++ 	SFE_IPV6_EXCEPTION_EVENT_IP_OPTIONS_INCOMPLETE,
++ 	SFE_IPV6_EXCEPTION_EVENT_UNHANDLED_PROTOCOL,
++ 	SFE_IPV6_EXCEPTION_EVENT_FLOW_COOKIE_ADD_FAIL,
+++	SFE_IPV6_EXCEPTION_EVENT_CLONED_SKB_UNSHARE_ERROR,
++ 	SFE_IPV6_EXCEPTION_EVENT_LAST
++ };
++ 
++@@ -415,7 +416,8 @@ static char *sfe_ipv6_exception_events_s
++ 	"DATAGRAM_INCOMPLETE",
++ 	"IP_OPTIONS_INCOMPLETE",
++ 	"UNHANDLED_PROTOCOL",
++-	"FLOW_COOKIE_ADD_FAIL"
+++	"FLOW_COOKIE_ADD_FAIL",
+++	"CLONED_SKB_UNSHARE_ERROR"
++ };
++ 
++ /*
++@@ -1370,6 +1372,10 @@ static int sfe_ipv6_recv_udp(struct sfe_
++ 		skb = skb_unshare(skb, GFP_ATOMIC);
++                 if (!skb) {
++ 			DEBUG_WARN("Failed to unshare the cloned skb\n");
+++			si->exception_events[SFE_IPV6_EXCEPTION_EVENT_CLONED_SKB_UNSHARE_ERROR]++;
+++			si->packets_not_forwarded++;
+++			spin_unlock_bh(&si->lock);
+++
++ 			return 0;
++ 		}
++ 
++@@ -1926,6 +1932,10 @@ static int sfe_ipv6_recv_tcp(struct sfe_
++ 		skb = skb_unshare(skb, GFP_ATOMIC);
++                 if (!skb) {
++ 			DEBUG_WARN("Failed to unshare the cloned skb\n");
+++			si->exception_events[SFE_IPV6_EXCEPTION_EVENT_CLONED_SKB_UNSHARE_ERROR]++;
+++			si->packets_not_forwarded++;
+++			spin_unlock_bh(&si->lock);
+++
++ 			return 0;
++ 		}
++ 
+diff --git a/package/kernel/qca/shortcut-fe/shortcut-fe/patches/201-rework-nfct-notification.patch b/package/kernel/qca/shortcut-fe/shortcut-fe/patches/201-rework-nfct-notification.patch
+new file mode 100644
+index 0000000000000..63109a7a8b389
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/shortcut-fe/patches/201-rework-nfct-notification.patch
+@@ -0,0 +1,36 @@
++--- a/shortcut-fe/sfe_cm.c
+++++ b/shortcut-fe/sfe_cm.c
++@@ -1002,7 +1002,7 @@ static int __init sfe_cm_init(void)
++ 	 */
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
++ #ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++-	(void)nf_conntrack_register_notifier(&init_net, &sfe_cm_conntrack_notifier);
+++	(void)nf_conntrack_register_chain_notifier(&init_net, &sfe_cm_conntrack_notifier);
++ #else
++ 	result = nf_conntrack_register_notifier(&init_net, &sfe_cm_conntrack_notifier);
++ 	if (result < 0) {
++@@ -1030,10 +1030,10 @@ static int __init sfe_cm_init(void)
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
++ #ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++ exit4:
+++#endif
++ 	nf_unregister_net_hooks(&init_net, sfe_cm_ops_post_routing, \
++ 				ARRAY_SIZE(sfe_cm_ops_post_routing));
++ #endif
++-#endif
++ exit3:
++ 	unregister_inet6addr_notifier(&sc->inet6_notifier);
++ 	unregister_inetaddr_notifier(&sc->inet_notifier);
++@@ -1077,8 +1077,11 @@ static void __exit sfe_cm_exit(void)
++ 	sfe_ipv6_destroy_all_rules_for_dev(NULL);
++ 
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	nf_conntrack_unregister_chain_notifier(&init_net, &sfe_cm_conntrack_notifier);
+++#else
++ 	nf_conntrack_unregister_notifier(&init_net, &sfe_cm_conntrack_notifier);
++-
+++#endif
++ #endif
++ 	nf_unregister_net_hooks(&init_net, sfe_cm_ops_post_routing, \
++ 				ARRAY_SIZE(sfe_cm_ops_post_routing));
+diff --git a/package/kernel/qca/shortcut-fe/simulated-driver/Makefile b/package/kernel/qca/shortcut-fe/simulated-driver/Makefile
+new file mode 100644
+index 0000000000000..480a1e07b6fec
+--- /dev/null
++++ b/package/kernel/qca/shortcut-fe/simulated-driver/Makefile
+@@ -0,0 +1,57 @@
++#
++# Copyright (c) 2015 The Linux Foundation. All rights reserved.
++# Permission to use, copy, modify, and/or distribute this software for
++# any purpose with or without fee is hereby granted, provided that the
++# above copyright notice and this permission notice appear in all copies.
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
++# OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++
++include $(TOPDIR)/rules.mk
++include $(INCLUDE_DIR)/kernel.mk
++
++PKG_NAME:=shortcut-fe-simulated-driver
++PKG_RELEASE:=1
++
++PKG_SOURCE_URL:=https://git.codelinaro.org/clo/qsdk/oss/lklm/shortcut-fe
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_VERSION:=c7dd8173b178affc9d8da22f51610243be994e1c
++
++include $(INCLUDE_DIR)/package.mk
++
++define KernelPackage/shortcut-fe-drv
++  SECTION:=kernel
++  CATEGORY:=Kernel modules
++  SUBMENU:=Network Support
++  DEPENDS:=@TARGET_ipq806x||TARGET_ipq807x +kmod-shortcut-fe
++  TITLE:=Simulated sfe driver for ECM
++  FILES:=$(PKG_BUILD_DIR)/simulated-driver/shortcut-fe-drv.ko
++  AUTOLOAD:=$(call AutoLoad,10,shortcut-fe-drv)
++endef
++
++define KernelPackage/shortcut-fe-drv/Description
++Simulated sfe driver which act as an adapter to convert message between a connection manager and the SFE core engine.
++endef
++
++EXTRA_CFLAGS+=-DSFE_SUPPORT_IPV6
++
++define Build/Compile
++	$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
++		$(KERNEL_MAKE_FLAGS) \
++		$(PKG_MAKE_FLAGS) \
++		M="$(PKG_BUILD_DIR)/simulated-driver" \
++		EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
++		modules
++endef
++
++define Build/InstallDev
++	$(INSTALL_DIR) $(1)/usr/include/shortcut-fe
++	$(CP) -rf $(PKG_BUILD_DIR)/simulated-driver/sfe_drv.h $(1)/usr/include/shortcut-fe
++endef
++
++$(eval $(call KernelPackage,shortcut-fe-drv))
+diff --git a/target/linux/generic/hack-5.4/999-01-shortcut-fe-support.patch b/target/linux/generic/hack-5.4/999-01-shortcut-fe-support.patch
+new file mode 100644
+index 0000000000000..96a3c0927762d
+--- /dev/null
++++ b/target/linux/generic/hack-5.4/999-01-shortcut-fe-support.patch
+@@ -0,0 +1,347 @@
++--- a/include/linux/skbuff.h
+++++ b/include/linux/skbuff.h
++@@ -825,6 +825,9 @@
++ 	__u8			decrypted:1;
++ #endif
++ 	__u8			gro_skip:1;
+++#ifdef CONFIG_SHORTCUT_FE
+++	__u8			fast_forwarded:1;
+++#endif
++ 
++ #ifdef CONFIG_NET_SCHED
++ 	__u16			tc_index;	/* traffic control index */
++--- a/include/linux/if_bridge.h
+++++ b/include/linux/if_bridge.h
++@@ -51,6 +51,8 @@
++ #define BR_DEFAULT_AGEING_TIME	(300 * HZ)
++ 
++ extern void brioctl_set(int (*ioctl_hook)(struct net *, unsigned int, void __user *));
+++extern void br_dev_update_stats(struct net_device *dev,
+++				struct rtnl_link_stats64 *nlstats);
++ 
++ #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
++ int br_multicast_list_adjacent(struct net_device *dev,
++--- a/include/net/netns/conntrack.h
+++++ b/include/net/netns/conntrack.h
++@@ -112,6 +112,9 @@ struct netns_ct {
++ 
++ 	struct ct_pcpu __percpu *pcpu_lists;
++ 	struct ip_conntrack_stat __percpu *stat;
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	struct atomic_notifier_head nf_conntrack_chain;
+++#endif
++ 	struct nf_ct_event_notifier __rcu *nf_conntrack_event_cb;
++ 	struct nf_exp_event_notifier __rcu *nf_expect_event_cb;
++ 	struct nf_ip_net	nf_ct_proto;
++--- a/include/net/netfilter/nf_conntrack_ecache.h
+++++ b/include/net/netfilter/nf_conntrack_ecache.h
++@@ -72,6 +72,11 @@ struct nf_ct_event {
++ 	int report;
++ };
++ 
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++extern int nf_conntrack_register_chain_notifier(struct net *net, struct notifier_block *nb);
+++extern int nf_conntrack_unregister_chain_notifier(struct net *net, struct notifier_block *nb);
+++#endif
+++
++ struct nf_ct_event_notifier {
++ 	int (*fcn)(unsigned int events, struct nf_ct_event *item);
++ };
++@@ -105,11 +110,13 @@ static inline void
++ nf_conntrack_event_cache(enum ip_conntrack_events event, struct nf_conn *ct)
++ {
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
++-	struct net *net = nf_ct_net(ct);
++ 	struct nf_conntrack_ecache *e;
+++#ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	struct net *net = nf_ct_net(ct);
++ 
++ 	if (!rcu_access_pointer(net->ct.nf_conntrack_event_cb))
++ 		return;
+++#endif
++ 
++ 	e = nf_ct_ecache_find(ct);
++ 	if (e == NULL)
++@@ -124,10 +131,12 @@ nf_conntrack_event_report(enum ip_conntr
++ 			  u32 portid, int report)
++ {
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+++#ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++ 	const struct net *net = nf_ct_net(ct);
++ 
++ 	if (!rcu_access_pointer(net->ct.nf_conntrack_event_cb))
++ 		return 0;
+++#endif
++ 
++ 	return nf_conntrack_eventmask_report(1 << event, ct, portid, report);
++ #else
++@@ -139,10 +148,12 @@ static inline int
++ nf_conntrack_event(enum ip_conntrack_events event, struct nf_conn *ct)
++ {
++ #ifdef CONFIG_NF_CONNTRACK_EVENTS
+++#ifndef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
++ 	const struct net *net = nf_ct_net(ct);
++ 
++ 	if (!rcu_access_pointer(net->ct.nf_conntrack_event_cb))
++ 		return 0;
+++#endif
++ 
++ 	return nf_conntrack_eventmask_report(1 << event, ct, 0, 0);
++ #else
++--- a/include/linux/timer.h
+++++ b/include/linux/timer.h
++@@ -17,6 +17,9 @@ struct timer_list {
++ 	unsigned long		expires;
++ 	void			(*function)(struct timer_list *);
++ 	u32			flags;
+++#ifdef CONFIG_SHORTCUT_FE
+++	unsigned long		cust_data;
+++#endif
++ 
++ #ifdef CONFIG_LOCKDEP
++ 	struct lockdep_map	lockdep_map;
++--- a/net/Kconfig
+++++ b/net/Kconfig
++@@ -473,3 +473,6 @@ config HAVE_CBPF_JIT
++ # Extended BPF JIT (eBPF)
++ config HAVE_EBPF_JIT
++ 	bool
+++
+++config SHORTCUT_FE
+++	bool "Enables kernel network stack path for Shortcut  Forwarding Engine
++--- a/net/core/dev.c
+++++ b/net/core/dev.c
++@@ -3189,8 +3189,17 @@ static int xmit_one(struct sk_buff *skb,
++ 	unsigned int len;
++ 	int rc;
++ 
+++#ifdef CONFIG_SHORTCUT_FE
+++	/* If this skb has been fast forwarded then we don't want it to
+++	 * go to any taps (by definition we're trying to bypass them).
+++	 */
+++	if (!skb->fast_forwarded) {
+++#endif
++ 	if (dev_nit_active(dev))
++ 		dev_queue_xmit_nit(skb, dev);
+++#ifdef CONFIG_SHORTCUT_FE
+++	}
+++#endif
++ 
++ #ifdef CONFIG_ETHERNET_PACKET_MANGLE
++ 	if (!dev->eth_mangle_tx ||
++@@ -4702,6 +4711,11 @@ void netdev_rx_handler_unregister(struct
++ }
++ EXPORT_SYMBOL_GPL(netdev_rx_handler_unregister);
++ 
+++#ifdef CONFIG_SHORTCUT_FE
+++int (*athrs_fast_nat_recv)(struct sk_buff *skb) __rcu __read_mostly;
+++EXPORT_SYMBOL_GPL(athrs_fast_nat_recv);
+++#endif
+++
++ /*
++  * Limit the use of PFMEMALLOC reserves to those protocols that implement
++  * the special handling of PFMEMALLOC skbs.
++@@ -4751,6 +4765,9 @@ static int __netif_receive_skb_core(stru
++ 	bool deliver_exact = false;
++ 	int ret = NET_RX_DROP;
++ 	__be16 type;
+++#ifdef CONFIG_SHORTCUT_FE
+++	int (*fast_recv)(struct sk_buff *skb);
+++#endif
++ 
++ 	net_timestamp_check(!netdev_tstamp_prequeue, skb);
++ 
++@@ -4791,6 +4808,16 @@ another_round:
++ 			goto out;
++ 	}
++ 
+++#ifdef CONFIG_SHORTCUT_FE
+++	fast_recv = rcu_dereference(athrs_fast_nat_recv);
+++	if (fast_recv) {
+++		if (fast_recv(skb)) {
+++			ret = NET_RX_SUCCESS;
+++			goto out;
+++		}
+++	}
+++#endif
+++
++ 	if (skb_skip_tc_classify(skb))
++ 		goto skip_classify;
++ 
++--- a/net/netfilter/nf_conntrack_proto_tcp.c
+++++ b/net/netfilter/nf_conntrack_proto_tcp.c
++@@ -33,11 +33,17 @@
++ 
++ /* Do not check the TCP window for incoming packets  */
++ static int nf_ct_tcp_no_window_check __read_mostly = 1;
+++#ifdef CONFIG_SHORTCUT_FE
+++EXPORT_SYMBOL_GPL(nf_ct_tcp_no_window_check);
+++#endif
++ 
++ /* "Be conservative in what you do,
++     be liberal in what you accept from others."
++     If it's non-zero, we mark only out of window RST segments as INVALID. */
++ static int nf_ct_tcp_be_liberal __read_mostly = 0;
+++#ifdef CONFIG_SHORTCUT_FE
+++EXPORT_SYMBOL_GPL(nf_ct_tcp_be_liberal);
+++#endif
++ 
++ /* If it is set to zero, we disable picking up already established
++    connections. */
++--- a/net/bridge/br_if.c
+++++ b/net/bridge/br_if.c
++@@ -757,3 +757,26 @@
++ 	return p->flags & flag;
++ }
++ EXPORT_SYMBOL_GPL(br_port_flag_is_set);
+++
+++/* Update bridge statistics for bridge packets processed by offload engines */
+++void br_dev_update_stats(struct net_device *dev,
+++			 struct rtnl_link_stats64 *nlstats)
+++{
+++	struct net_bridge *br;
+++	struct pcpu_sw_netstats *stats;
+++
+++	/* Is this a bridge? */
+++	if (!(dev->priv_flags & IFF_EBRIDGE))
+++		return;
+++
+++	br = netdev_priv(dev);
+++	stats = this_cpu_ptr(br->stats);
+++
+++	u64_stats_update_begin(&stats->syncp);
+++	stats->rx_packets += nlstats->rx_packets;
+++	stats->rx_bytes += nlstats->rx_bytes;
+++	stats->tx_packets += nlstats->tx_packets;
+++	stats->tx_bytes += nlstats->tx_bytes;
+++	u64_stats_update_end(&stats->syncp);
+++}
+++EXPORT_SYMBOL_GPL(br_dev_update_stats);
++--- a/net/netfilter/Kconfig
+++++ b/net/netfilter/Kconfig
++@@ -146,6 +146,14 @@
++ 
++ 	  If unsure, say `N'.
++ 
+++config NF_CONNTRACK_CHAIN_EVENTS
+++	bool "Register multiple callbacks to ct events"
+++	depends on NF_CONNTRACK_EVENTS
+++	help
+++	  Support multiple registrations.
+++
+++	  If unsure, say `N'.
+++
++ config NF_CONNTRACK_TIMESTAMP
++ 	bool  'Connection tracking timestamping'
++ 	depends on NETFILTER_ADVANCED
++--- a/net/netfilter/nf_conntrack_core.c
+++++ b/net/netfilter/nf_conntrack_core.c
++@@ -2591,6 +2591,9 @@ int nf_conntrack_init_net(struct net *ne
++ 	nf_conntrack_ecache_pernet_init(net);
++ 	nf_conntrack_helper_pernet_init(net);
++ 	nf_conntrack_proto_pernet_init(net);
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	ATOMIC_INIT_NOTIFIER_HEAD(&net->ct.nf_conntrack_chain);
+++#endif
++ 
++ 	return 0;
++ 
++--- a/net/netfilter/nf_conntrack_ecache.c
+++++ b/net/netfilter/nf_conntrack_ecache.c
++@@ -17,6 +17,9 @@
++ #include <linux/stddef.h>
++ #include <linux/err.h>
++ #include <linux/percpu.h>
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++#include <linux/notifier.h>
+++#endif
++ #include <linux/kernel.h>
++ #include <linux/netdevice.h>
++ #include <linux/slab.h>
++@@ -127,7 +130,11 @@ int nf_conntrack_eventmask_report(unsign
++ 
++ 	rcu_read_lock();
++ 	notify = rcu_dereference(net->ct.nf_conntrack_event_cb);
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	if (!notify && !rcu_dereference_raw(net->ct.nf_conntrack_chain.head))
+++#else
++ 	if (!notify)
+++#endif
++ 		goto out_unlock;
++ 
++ 	e = nf_ct_ecache_find(ct);
++@@ -146,7 +153,15 @@ int nf_conntrack_eventmask_report(unsign
++ 		if (!((eventmask | missed) & e->ctmask))
++ 			goto out_unlock;
++ 
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++		ret = atomic_notifier_call_chain(&net->ct.nf_conntrack_chain,
+++			eventmask | missed, &item);
+++
+++		if (notify)
+++			ret = notify->fcn(eventmask | missed, &item);
+++#else
++ 		ret = notify->fcn(eventmask | missed, &item);
+++#endif
++ 		if (unlikely(ret < 0 || missed)) {
++ 			spin_lock_bh(&ct->lock);
++ 			if (ret < 0) {
++@@ -186,7 +201,11 @@ void nf_ct_deliver_cached_events(struct
++ 
++ 	rcu_read_lock();
++ 	notify = rcu_dereference(net->ct.nf_conntrack_event_cb);
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	if ((notify == NULL) && !rcu_dereference_raw(net->ct.nf_conntrack_chain.head))
+++#else
++ 	if (notify == NULL)
+++#endif
++ 		goto out_unlock;
++ 
++ 	e = nf_ct_ecache_find(ct);
++@@ -210,7 +229,16 @@ void nf_ct_deliver_cached_events(struct
++ 	item.portid = 0;
++ 	item.report = 0;
++ 
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++	ret = atomic_notifier_call_chain(&net->ct.nf_conntrack_chain,
+++			events | missed,
+++			&item);
+++
+++	if (notify != NULL)
+++		ret = notify->fcn(events | missed, &item);
+++#else
++ 	ret = notify->fcn(events | missed, &item);
+++#endif
++ 
++ 	if (likely(ret == 0 && !missed))
++ 		goto out_unlock;
++@@ -257,6 +285,14 @@ out_unlock:
++ 	rcu_read_unlock();
++ }
++ 
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++int nf_conntrack_register_chain_notifier(struct net *net, struct notifier_block *nb)
+++{
+++	return atomic_notifier_chain_register(&net->ct.nf_conntrack_chain, nb);
+++}
+++EXPORT_SYMBOL_GPL(nf_conntrack_register_chain_notifier);
+++#endif
+++
++ int nf_conntrack_register_notifier(struct net *net,
++ 				   struct nf_ct_event_notifier *new)
++ {
++@@ -279,6 +315,14 @@ out_unlock:
++ }
++ EXPORT_SYMBOL_GPL(nf_conntrack_register_notifier);
++ 
+++#ifdef CONFIG_NF_CONNTRACK_CHAIN_EVENTS
+++int nf_conntrack_unregister_chain_notifier(struct net *net, struct notifier_block *nb)
+++{
+++	return atomic_notifier_chain_unregister(&net->ct.nf_conntrack_chain, nb);
+++}
+++EXPORT_SYMBOL_GPL(nf_conntrack_unregister_chain_notifier);
+++#endif
+++
++ void nf_conntrack_unregister_notifier(struct net *net,
++ 				      struct nf_ct_event_notifier *new)
++ {

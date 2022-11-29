@@ -1,0 +1,37 @@
+From 35773ec8cadd14160aaeb4adf9adb450747a2adf Mon Sep 17 00:00:00 2001
+From: Andrea Pesaresi <andreapesaresi82@gmail.com>
+Date: Sat, 30 Mar 2024 09:41:35 +0100
+Subject: [PATCH] kmsbd-tools: switch to use tagged release
+
+Instead of checking Git sources, we will use now tagged releases.
+
+This solve the strange version 0~3.5.1-r1, now will be 3.5.2-r2
+
+Signed-off-by: Andrea Pesaresi <andreapesaresi82@gmail.com>
+(cherry picked from commit f8a7ee7f4757bc12e081deb3296ddbdbcd5f33b4)
+---
+ net/ksmbd-tools/Makefile | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/feeds/packages/net/ksmbd-tools/Makefile b/feeds/packages/net/ksmbd-tools/Makefile
+index 5c914c24cfb9c..a0f939dbe0889 100644
+--- a/feeds/packages/net/ksmbd-tools/Makefile
++++ b/feeds/packages/net/ksmbd-tools/Makefile
+@@ -1,12 +1,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=ksmbd-tools
+-PKG_RELEASE:=1
++PKG_VERSION:=3.5.1
++PKG_RELEASE:=2
+ 
+-PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_URL:=https://github.com/cifsd-team/ksmbd-tools
+-PKG_SOURCE_VERSION:=3.5.1
+-PKG_MIRROR_HASH:=6e8e56ecdfa0ddfdb3a351b27ae5b9148d4f6695bcee9a7eae39c2a42481ef18
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=https://github.com/cifsd-team/ksmbd-tools/releases/download/$(PKG_VERSION)
++PKG_HASH:=ab377b3044c48382303f3f7ec95f2e1a17592c774d70b2a11f32952099dbb214
+ 
+ PKG_LICENSE:=GPL-2.0-or-later
+ PKG_LICENSE_FILES:=COPYING

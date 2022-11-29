@@ -1,0 +1,54 @@
+From a7c7265e1bf4eda278a5e1fb0b26ab418a71466c Mon Sep 17 00:00:00 2001
+From: Tiago Gaspar <tiagogaspar8@gmail.com>
+Date: Fri, 17 Nov 2023 09:25:36 +0000
+Subject: [PATCH] strongswan: swanctl: add support for replay window
+
+Add support for replay window configuration in UCI.
+
+Signed-off-by: Tiago Gaspar <tiagogaspar8@gmail.com>
+---
+ net/strongswan/Makefile           | 2 +-
+ net/strongswan/files/swanctl.init | 3 +++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/feeds/packages/net/strongswan/Makefile b/feeds/packages/net/strongswan/Makefile
+index d175b4c4b8eda..877e5c3ccf51c 100644
+--- a/feeds/packages/net/strongswan/Makefile
++++ b/feeds/packages/net/strongswan/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=strongswan
+ PKG_VERSION:=5.9.11
+-PKG_RELEASE:=2
++PKG_RELEASE:=3
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
+ PKG_SOURCE_URL:=https://download.strongswan.org/ https://download2.strongswan.org/
+diff --git a/feeds/packages/net/strongswan/files/swanctl.init b/feeds/packages/net/strongswan/files/swanctl.init
+index dcc065d2ea1b0..289e7ff567aa1 100644
+--- a/feeds/packages/net/strongswan/files/swanctl.init
++++ b/feeds/packages/net/strongswan/files/swanctl.init
+@@ -244,6 +244,7 @@ config_child() {
+ 	local lifebytes
+ 	local rekeypackets
+ 	local lifepackets
++	local replay_window
+ 
+ 	config_get startaction "$conf" startaction "route"
+ 	config_get local_nat "$conf" local_nat ""
+@@ -262,6 +263,7 @@ config_child() {
+ 	config_get lifebytes "$conf" lifebytes ""
+ 	config_get rekeypackets "$conf" rekeypackets ""
+ 	config_get lifepackets "$conf" lifepackets ""
++	config_get replay_window "$conf" replay_window ""
+ 
+ 	config_list_foreach "$conf" local_subnet append_var local_subnet ","
+ 	config_list_foreach "$conf" remote_subnet append_var remote_subnet ","
+@@ -370,6 +372,7 @@ config_child() {
+ 
+ 	[ -n "$updown" ] && swanctl_xappend4 "updown = $updown"
+ 	[ -n "$dpdaction" ] && swanctl_xappend4 "dpd_action = $dpdaction"
++	[ -n "$replay_window" ] && swanctl_xappend4 "replay_window = $replay_window"
+ 
+         swanctl_xappend3 "}"
+ }

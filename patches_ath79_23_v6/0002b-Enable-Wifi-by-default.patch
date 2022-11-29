@@ -1,0 +1,26 @@
+From 9ec3889b907c89952a1db7264087b7e234214001 Mon Sep 17 00:00:00 2001
+From: XFY9326 <1069665464@qq.com>
+Date: Sat, 18 Sep 2021 18:18:35 +0100
+Subject: [PATCH] Set default Wifi password
+
+---
+ package/kernel/mac80211/files/lib/wifi/mac80211.sh | 3 ++-
+ 1 file changed, 2 insertion(+), 1 deletion(-)
+
+diff --git a/package/kernel/mac80211/files/lib/wifi/mac80211.sh b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+index 3e99f06..e8a6136 100644
+--- a/package/kernel/mac80211/files/lib/wifi/mac80211.sh
++++ b/package/kernel/mac80211/files/lib/wifi/mac80211.sh
+@@ -210,7 +210,8 @@ detect_mac80211() {
+ 			set wireless.default_${name}.network=lan
+ 			set wireless.default_${name}.mode=ap
+ 			set wireless.default_${name}.ssid=OpenWrt
+-			set wireless.default_${name}.encryption=none
++			set wireless.default_${name}.encryption=psk2
++			set wireless.default_${name}.key=1234567890
+ EOF
+ 		uci -q commit wireless
+ 	done
+-- 
+2.25.1
+

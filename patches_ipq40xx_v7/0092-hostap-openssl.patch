@@ -1,0 +1,187 @@
+diff --git a/package/network/services/hostapd/patches/999-openssl.patch b/package/network/services/hostapd/patches/999-openssl.patch
+new file mode 100644
+index 0000000..de06187
+--- /dev/null
++++ b/package/network/services/hostapd/patches/999-openssl.patch
+@@ -0,0 +1,178 @@
++diff --git a/src/crypto/crypto_openssl.c b/src/crypto/crypto_openssl.c
++index 22f6ab4c1..c6369e8ab 100644
++--- a/src/crypto/crypto_openssl.c
+++++ b/src/crypto/crypto_openssl.c
++@@ -471,11 +471,11 @@ void * aes_encrypt_init(const u8 *key, size_t len)
++ 	ctx = EVP_CIPHER_CTX_new();
++ 	if (ctx == NULL)
++ 		return NULL;
++-	if (EVP_EncryptInit_ex(ctx, type, NULL, key, NULL) != 1) {
+++	if (EVP_EncryptInit_ex(ctx, type, NULL, key, NULL) != 1 ||
+++	    EVP_CIPHER_CTX_set_padding(ctx, 0) != 1) {
++ 		EVP_CIPHER_CTX_free(ctx);
++ 		return NULL;
++ 	}
++-	EVP_CIPHER_CTX_set_padding(ctx, 0);
++ 	return ctx;
++ }
++ 
++@@ -528,11 +528,11 @@ void * aes_decrypt_init(const u8 *key, size_t len)
++ 	ctx = EVP_CIPHER_CTX_new();
++ 	if (ctx == NULL)
++ 		return NULL;
++-	if (EVP_DecryptInit_ex(ctx, type, NULL, key, NULL) != 1) {
+++	if (EVP_DecryptInit_ex(ctx, type, NULL, key, NULL) != 1 ||
+++	    EVP_CIPHER_CTX_set_padding(ctx, 0) != 1) {
++ 		EVP_CIPHER_CTX_free(ctx);
++ 		return NULL;
++ 	}
++-	EVP_CIPHER_CTX_set_padding(ctx, 0);
++ 	return ctx;
++ }
++ 
++@@ -1313,6 +1313,7 @@ struct crypto_hash {
++ #else /* OpenSSL version >= 3.0 */
++ 	HMAC_CTX *ctx;
++ #endif /* OpenSSL version >= 3.0 */
+++	bool failed;
++ };
++ 
++ 
++@@ -1425,9 +1426,11 @@ void crypto_hash_update(struct crypto_hash *ctx, const u8 *data, size_t len)
++ 	if (ctx == NULL)
++ 		return;
++ #if OPENSSL_VERSION_NUMBER >= 0x30000000L
++-	EVP_MAC_update(ctx->ctx, data, len);
+++	if (!EVP_MAC_update(ctx->ctx, data, len))
+++		ctx->failed = true;
++ #else /* OpenSSL version >= 3.0 */
++-	HMAC_Update(ctx->ctx, data, len);
+++	if (!HMAC_Update(ctx->ctx, data, len))
+++		ctx->failed = true;
++ #endif /* OpenSSL version >= 3.0 */
++ }
++ 
++@@ -1437,6 +1440,7 @@ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
++ #if OPENSSL_VERSION_NUMBER >= 0x30000000L
++ 	size_t mdlen;
++ 	int res;
+++	bool failed;
++ 
++ 	if (!ctx)
++ 		return -2;
++@@ -1455,11 +1459,15 @@ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
++ 	}
++ 	res = EVP_MAC_final(ctx->ctx, mac, &mdlen, mdlen);
++ 	EVP_MAC_CTX_free(ctx->ctx);
+++	failed = ctx->failed;
++ 	bin_clear_free(ctx, sizeof(*ctx));
++ 
++ 	if (TEST_FAIL())
++ 		return -1;
++ 
+++	if (failed)
+++		return -2;
+++
++ 	if (res == 1) {
++ 		*len = mdlen;
++ 		return 0;
++@@ -1469,6 +1477,7 @@ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
++ #else /* OpenSSL version >= 3.0 */
++ 	unsigned int mdlen;
++ 	int res;
+++	bool failed;
++ 
++ 	if (ctx == NULL)
++ 		return -2;
++@@ -1482,11 +1491,15 @@ int crypto_hash_finish(struct crypto_hash *ctx, u8 *mac, size_t *len)
++ 	mdlen = *len;
++ 	res = HMAC_Final(ctx->ctx, mac, &mdlen);
++ 	HMAC_CTX_free(ctx->ctx);
+++	failed = ctx->failed;
++ 	bin_clear_free(ctx, sizeof(*ctx));
++ 
++ 	if (TEST_FAIL())
++ 		return -1;
++ 
+++	if (failed)
+++		return -2;
+++
++ 	if (res == 1) {
++ 		*len = mdlen;
++ 		return 0;
++@@ -1835,6 +1835,7 @@ int omac1_aes_vector(const u8 *key, size_t key_len, size_t num_elem,
++ 	ret = 0;
++ fail:
++ 	EVP_MAC_CTX_free(ctx);
+++	EVP_MAC_free(emac);
++ 	return ret;
++ #else /* OpenSSL version >= 3.0 */
++ 	CMAC_CTX *ctx;
++@@ -2854,8 +2854,10 @@ struct wpabuf * crypto_ecdh_set_peerkey(struct crypto_ecdh *ecdh, int inc_y,
++ 
++ 	/* Encode using SECG SEC 1, Sec. 2.3.4 format */
++ 	peer = os_malloc(1 + len);
++-	if (!peer)
+++	if (!peer) {
+++		EVP_PKEY_free(peerkey);
++ 		return NULL;
+++	}
++ 	peer[0] = inc_y ? 0x04 : 0x02;
++ 	os_memcpy(peer + 1, key, len);
++ 
++@@ -3010,11 +3010,15 @@ struct crypto_ec_key * crypto_ec_key_parse_priv(const u8 *der, size_t der_len)
++ 		NULL, NULL);
++ 	if (!ctx ||
++ 	    OSSL_DECODER_from_data(ctx, &der, &der_len) != 1) {
++-		wpa_printf(MSG_INFO, "OpenSSL: Decoding EC private key (DER) failed: %s",
+++		wpa_printf(MSG_INFO,
+++			   "OpenSSL: Decoding EC private key (DER) failed: %s",
++ 			   ERR_error_string(ERR_get_error(), NULL));
+++		if (ctx)
+++			OSSL_DECODER_CTX_free(ctx);
++ 		goto fail;
++ 	}
++ 
+++	OSSL_DECODER_CTX_free(ctx);
++ 	return (struct crypto_ec_key *) pkey;
++ fail:
++ 	crypto_ec_key_deinit((struct crypto_ec_key *) pkey);
++@@ -3932,9 +3932,10 @@ static int openssl_evp_pkey_ec_prime_len(struct crypto_ec_key *key)
++ 	group = EC_GROUP_new_by_curve_name(nid);
++ 	prime = BN_new();
++ 	if (!group || !prime)
++-		return -1;
+++		goto fail;
++ 	if (EC_GROUP_get_curve(group, prime, NULL, NULL, NULL) == 1)
++ 		prime_len = BN_num_bytes(prime);
+++fail:
++ 	EC_GROUP_free(group);
++ 	BN_free(prime);
++ 	return prime_len;
++@@ -4881,7 +4881,7 @@ hpke_labeled_expand(struct hpke_context *ctx, bool kem, const u8 *prk,
++ #if OPENSSL_VERSION_NUMBER >= 0x30000000L
++ 	hmac = EVP_MAC_fetch(NULL, "HMAC", NULL);
++ 	if (!hmac)
++-		return -1;
+++		goto fail;
++ 
++ 	params[0] = OSSL_PARAM_construct_utf8_string(
++ 		"digest",
++@@ -4890,7 +4890,7 @@ hpke_labeled_expand(struct hpke_context *ctx, bool kem, const u8 *prk,
++ #else /* OpenSSL version >= 3.0 */
++ 	hctx = HMAC_CTX_new();
++ 	if (!hctx)
++-		return -1;
+++		goto fail;
++ #endif /* OpenSSL version >= 3.0 */
++ 
++ 	while (left > 0) {
++@@ -4899,7 +4899,7 @@ hpke_labeled_expand(struct hpke_context *ctx, bool kem, const u8 *prk,
++ 		EVP_MAC_CTX_free(hctx);
++ 		hctx = EVP_MAC_CTX_new(hmac);
++ 		if (!hctx)
++-			return -1;
+++			goto fail;
++ 
++ 		if (EVP_MAC_init(hctx, prk, mdlen, params) != 1)
++ 			goto fail;
+-- 
+2.38.1.windows.1
+

@@ -1,0 +1,15 @@
+diff --git a/target/linux/generic/config-5.15 b/target/linux/generic/config-5.15
+index e9b8fc4..d77d065 100644
+--- a/target/linux/generic/config-5.15
++++ b/target/linux/generic/config-5.15
+@@ -4253,6 +4253,7 @@ CONFIG_NEW_LEDS=y
+ # CONFIG_NFC is not set
+ # CONFIG_NFP is not set
+ # CONFIG_NFSD is not set
++# CONFIG_NFSD_V2 is not set
+ # CONFIG_NFSD_V2_ACL is not set
+ CONFIG_NFSD_V3=y
+ # CONFIG_NFSD_V3_ACL is not set
+-- 
+2.38.1.windows.1
+

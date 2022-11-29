@@ -1,0 +1,179 @@
+CONFIG_TARGET_ipq40xx=y
+CONFIG_TARGET_ipq40xx_generic=y
+CONFIG_TARGET_MULTI_PROFILE=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_asus_map-ac2200=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_asus_rt-ac42u=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_asus_rt-ac58u=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_buffalo_wtr-m2133hp=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_dlink_dap-2610=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_ea6350v3=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_ea8300=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_mr8300=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_whw01=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_whw03=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_linksys_whw03v2=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_meraki_mr33=y
+CONFIG_TARGET_DEVICE_ipq40xx_generic_DEVICE_meraki_mr74=y
+CONFIG_ALL_KMODS=y
+CONFIG_DEVEL=y
+CONFIG_TARGET_PER_DEVICE_ROOTFS=y
+CONFIG_AUTOREMOVE=y
+# CONFIG_BPF_TOOLCHAIN_BUILD_LLVM is not set
+# CONFIG_BPF_TOOLCHAIN_NONE is not set
+# CONFIG_BPF_TOOLCHAIN_HOST is not set
+# CONFIG_BPF_TOOLCHAIN_HOST_PATH is not set
+CONFIG_HAS_BPF_TOOLCHAIN=y
+CONFIG_COLLECT_KERNEL_DEBUG=y
+# CONFIG_USE_LLVM_HOST is not set
+CONFIG_USE_LLVM_PREBUILT=y
+CONFIG_CCACHE=y
+CONFIG_CCACHE_DIR="/home/runner/.ccache"
+CONFIG_IMAGEOPT=y
+CONFIG_KERNEL_BUILD_DOMAIN="buildhost"
+CONFIG_KERNEL_BUILD_USER="builder"
+# CONFIG_KERNEL_KALLSYMS is not set
+# CONFIG_MAKE_TOOLCHAIN is not set
+CONFIG_OPENSSL_ENGINE=y
+CONFIG_OPENSSL_PREFER_CHACHA_OVER_GCM=y
+CONFIG_OPENSSL_WITH_ASM=y
+CONFIG_OPENSSL_WITH_CHACHA_POLY1305=y
+CONFIG_OPENSSL_WITH_CMS=y
+CONFIG_OPENSSL_WITH_DEPRECATED=y
+CONFIG_OPENSSL_WITH_ERROR_MESSAGES=y
+CONFIG_OPENSSL_WITH_IDEA=y
+CONFIG_OPENSSL_WITH_MDC2=y
+CONFIG_OPENSSL_WITH_PSK=y
+CONFIG_OPENSSL_WITH_SEED=y
+CONFIG_OPENSSL_WITH_SRP=y
+CONFIG_OPENSSL_WITH_TLS13=y
+CONFIG_OPENSSL_WITH_WHIRLPOOL=y
+CONFIG_PACKAGE_cgi-io=y
+CONFIG_PACKAGE_kmod-fast-classifier=y
+CONFIG_PACKAGE_kmod-shortcut-fe=y
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_kmod-crypto-authenc=y
+CONFIG_PACKAGE_kmod-cryptodev=y
+CONFIG_PACKAGE_kmod-wireguard=y
+CONFIG_PACKAGE_kmod-crypto-lib-chacha20poly1305=y
+CONFIG_PACKAGE_kmod-crypto-lib-chacha20=y
+CONFIG_PACKAGE_kmod-crypto-lib-poly1305=y
+CONFIG_PACKAGE_kmod-crypto-lib-curve25519=y
+CONFIG_PACKAGE_kmod-crypto-kpp=y
+CONFIG_PACKAGE_kmod-udptunnel4=y
+CONFIG_PACKAGE_kmod-udptunnel6=y
+CONFIG_PACKAGE_libbpf=y
+CONFIG_PACKAGE_libelf=y
+CONFIG_PACKAGE_zlib=y
+CONFIG_PACKAGE_liblucihttp=y
+CONFIG_PACKAGE_liblucihttp-ucode=y
+CONFIG_PACKAGE_libopenssl=y
+CONFIG_PACKAGE_libopenssl-devcrypto=m
+CONFIG_PACKAGE_libpcap=m
+CONFIG_PACKAGE_libxdp=m
+# CONFIG_DEFAULT_libustream-mbedtls is not set
+# CONFIG_PACKAGE_libustream-mbedtls is not set
+# CONFIG_PACKAGE_libmbedtls is not set
+CONFIG_PACKAGE_libustream-openssl=y
+CONFIG_PACKAGE_luci=y
+CONFIG_PACKAGE_luci-app-firewall=y
+CONFIG_PACKAGE_luci-app-opkg=y
+CONFIG_PACKAGE_luci-base=y
+CONFIG_PACKAGE_luci-light=y
+CONFIG_PACKAGE_luci-mod-admin-full=y
+CONFIG_PACKAGE_luci-mod-network=y
+CONFIG_PACKAGE_luci-mod-status=y
+CONFIG_PACKAGE_luci-mod-system=y
+CONFIG_PACKAGE_luci-proto-ipv6=y
+CONFIG_PACKAGE_luci-proto-ppp=y
+CONFIG_PACKAGE_luci-proto-wireguard=y
+CONFIG_PACKAGE_wireguard-tools=y
+# CONFIG_PACKAGE_luci-ssl is not set
+CONFIG_PACKAGE_luci-ssl-openssl=y
+CONFIG_PACKAGE_luci-theme-bootstrap=y
+CONFIG_LUA_ECO_OPENSSL=y
+# CONFIG_LUA_ECO_MBEDTLS is not set
+# CONFIG_PACKAGE_px5g-mbedtls is not set
+CONFIG_PACKAGE_openssl-util=y
+CONFIG_PACKAGE_openvpn-easy-rsa=y
+CONFIG_PACKAGE_qosify=m
+CONFIG_PACKAGE_rpcd=y
+CONFIG_PACKAGE_rpcd-mod-file=y
+CONFIG_PACKAGE_rpcd-mod-iwinfo=y
+CONFIG_PACKAGE_rpcd-mod-luci=y
+CONFIG_PACKAGE_rpcd-mod-rrdns=y
+CONFIG_PACKAGE_rpcd-mod-ucode=y
+CONFIG_PACKAGE_tc-tiny=m
+CONFIG_PACKAGE_ucode-mod-html=y
+CONFIG_PACKAGE_ucode-mod-math=y
+CONFIG_PACKAGE_uhttpd=y
+CONFIG_PACKAGE_uhttpd-mod-ubus=y
+# CONFIG_PACKAGE_wpad-basic-mbedtls is not set
+# CONFIG_PACKAGE_wpad-basic-openssl is not set
+CONFIG_PACKAGE_wpad-openssl=y
+CONFIG_PACKAGE_hostapd-utils=y
+CONFIG_PACKAGE_xdp-filter=m
+CONFIG_PACKAGE_xdp-loader=m
+CONFIG_PACKAGE_xdpdump=m
+CONFIG_PACKAGE_ksmbd-server=y
+CONFIG_PACKAGE_kmod-fs-ksmbd=y
+CONFIG_PACKAGE_kmod-nls-base=y
+CONFIG_PACKAGE_kmod-nls-utf8=y
+CONFIG_PACKAGE_kmod-crypto-chacha20poly1305=y
+CONFIG_PACKAGE_kmod-crypto-md5=y
+CONFIG_PACKAGE_kmod-crypto-cbc=y
+CONFIG_PACKAGE_kmod-crypto-ecb=y
+CONFIG_PACKAGE_kmod-crypto-des=y
+CONFIG_PACKAGE_kmod-crypto-sha256=y
+CONFIG_PACKAGE_kmod-asn1-decoder=y
+CONFIG_PACKAGE_kmod-oid-registry=y
+CONFIG_PACKAGE_kmod-fs-smbfs-common=y
+CONFIG_PACKAGE_libnl-core=y
+CONFIG_PACKAGE_libnl-genl=y
+CONFIG_PACKAGE_luci-app-ksmbd=y
+CONFIG_PACKAGE_kmod-fs-exfat=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_kmod-fs-ntfs3=y
+CONFIG_PACKAGE_kmod-fs-vfat=y
+CONFIG_PACKAGE_openvpn-openssl=y
+CONFIG_OPENVPN_openssl_ENABLE_DCO=y
+CONFIG_PACKAGE_kmod-ovpn-dco-v2=y
+CONFIG_PACKAGE_libcap-ng=y
+CONFIG_PACKAGE_liblzo=y
+CONFIG_PACKAGE_liblz4=y
+CONFIG_PACKAGE_luci-app-openvpn=y
+CONFIG_PACKAGE_luci-compat=y
+CONFIG_PACKAGE_luci-lua-runtime=y
+CONFIG_PACKAGE_lua=y
+CONFIG_PACKAGE_liblua=y
+CONFIG_PACKAGE_luci-lib-base=y
+CONFIG_PACKAGE_luci-lib-nixio=y
+CONFIG_PACKAGE_luci-lib-ip=y
+CONFIG_PACKAGE_luci-lib-jsonc=y
+CONFIG_PACKAGE_liblucihttp-lua=y
+CONFIG_PACKAGE_libubus-lua=y
+CONFIG_PACKAGE_ucode-mod-lua=y
+CONFIG_PACKAGE_iperf3=y
+CONFIG_PACKAGE_libiperf3=y
+CONFIG_PACKAGE_dnsmasq-full=y
+CONFIG_PACKAGE_dnsmasq=m
+CONFIG_PACKAGE_unet-cli=y
+CONFIG_PACKAGE_unet-dht=m
+CONFIG_PACKAGE_unetd=y
+CONFIG_PACKAGE_luci-proto-unet=y
+CONFIG_REPRODUCIBLE_DEBUG_INFO=y
+# CONFIG_SDK is not set
+# CONFIG_SDK_LLVM_BPF is not set
+CONFIG_USE_LLVM_BUILD=y
+CONFIG_VERSIONOPT=y
+CONFIG_VERSION_BUG_URL=""
+CONFIG_VERSION_CODE=""
+CONFIG_VERSION_DIST="OpenWrt"
+CONFIG_VERSION_FILENAMES=y
+CONFIG_VERSION_HOME_URL=""
+CONFIG_VERSION_HWREV=""
+CONFIG_VERSION_MANUFACTURER=""
+CONFIG_VERSION_MANUFACTURER_URL=""
+CONFIG_VERSION_NUMBER=""
+CONFIG_VERSION_PRODUCT=""
+CONFIG_VERSION_REPO="https://downloads.openwrt.org/releases/23.05.3"
+CONFIG_VERSION_SUPPORT_URL=""

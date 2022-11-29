@@ -1,0 +1,15 @@
+diff --git a/package/libs/toolchain/Makefile b/package/libs/toolchain/Makefile
+--- a/package/libs/toolchain/Makefile
++++ b/package/libs/toolchain/Makefile
+@@ -22,6 +22,11 @@ else
+   LIBC_VERSION:=<LIBC_VERSION>
+   LIBGCC_VERSION:=<LIBGCC_VERSION>
+ endif
++ifeq ($(CONFIG_EXTERNAL_TOOLCHAIN_LIBC_USE_MUSL),y)
++  LIBC_VERSION:=1.2.4
++  LIBC_SO_VERSION:=1.2.4
++  LIBGCC_VERSION:=12.3.0
++endif
+ 
+ define Package/gcc/Default
+   SECTION:=libs

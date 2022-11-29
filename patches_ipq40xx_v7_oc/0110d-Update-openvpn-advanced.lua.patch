@@ -1,0 +1,31 @@
+diff --git a/feeds/luci/applications/luci-app-openvpn/luasrc/model/cbi/openvpn-advanced.lua b/feeds/luci/applications/luci-app-openvpn/luasrc/model/cbi/openvpn-advanced.lua
+index 656aeed..fcd682d 100644
+--- a/feeds/luci/applications/luci-app-openvpn/luasrc/model/cbi/openvpn-advanced.lua
++++ b/feeds/luci/applications/luci-app-openvpn/luasrc/model/cbi/openvpn-advanced.lua
+@@ -189,7 +189,7 @@ local knownParams = {
+ 			translate("TCP/UDP port # for remote (default=1194)") },
+ 		{ ListValue,
+ 			"proto",
+-			{ "udp", "tcp-client", "tcp-server" },
++			{ "udp", "tcp-client", "tcp-server", "udp4", "tcp4-client", "tcp4-server", "udp6", "tcp6-client", "tcp6-server" },
+ 			translate("Use protocol") },
+ 		{ Flag,
+ 			"float",
+@@ -284,12 +284,12 @@ local knownParams = {
+ 			"fragment",
+ 			1500,
+ 			translate("Enable internal datagram fragmentation"),
+-			{ proto="udp" } },
++			{ proto="udp" }, { proto="udp4" }, { proto="udp6" } },
+ 		{ Value,
+ 			"mssfix",
+ 			1450,
+ 			translate("Set upper bound on TCP MSS"),
+-			{ proto="udp" } },
++			{ proto="udp" }, { proto="udp4" }, { proto="udp6" } },
+ 		{ Value,
+ 			"sndbuf",
+ 			65536,
+-- 
+2.38.1.windows.1
+

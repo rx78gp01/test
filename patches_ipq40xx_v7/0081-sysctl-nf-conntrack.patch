@@ -1,0 +1,27 @@
+From 29cb526fafa9dbf51d8b05a59f6a7d132410d961 Mon Sep 17 00:00:00 2001
+From: Andris PE <neandris@gmail.com>
+Date: Mon, 4 Mar 2024 20:14:29 +0200
+Subject: [PATCH] Avoid marking sack-unacked packets as retransmits
+
+Kernel does counting of packets after ack packet and on param-th packet
+it marks flow with (lower) re-transmit timeout. Push the threshold past
+4 data packets before sack is expected and dont wrongly interpret first-time
+  packets as retransmits.
+
+Ref: linux/net/netfilter/nf_conntrack_proto_tcp.c
+---
+ package/kernel/linux/files/sysctl-nf-conntrack.conf | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/package/kernel/linux/files/sysctl-nf-conntrack.conf b/package/kernel/linux/files/sysctl-nf-conntrack.conf
+index c6a0ef362b6a9f..4efdaafbf77c87 100644
+--- a/package/kernel/linux/files/sysctl-nf-conntrack.conf
++++ b/package/kernel/linux/files/sysctl-nf-conntrack.conf
+@@ -3,6 +3,7 @@
+ 
+ net.netfilter.nf_conntrack_acct=1
+ net.netfilter.nf_conntrack_checksum=0
++net.netfilter.nf_conntrack_tcp_max_retrans=5
+ net.netfilter.nf_conntrack_tcp_timeout_established=7440
+ net.netfilter.nf_conntrack_udp_timeout=60
+ net.netfilter.nf_conntrack_udp_timeout_stream=180

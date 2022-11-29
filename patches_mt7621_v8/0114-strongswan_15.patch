@@ -1,0 +1,50 @@
+diff --git a/feeds/packages/net/strongswan/Makefile b/feeds/packages/net/strongswan/Makefile
+index 82e890c..89814aa 100644
+--- a/feeds/packages/net/strongswan/Makefile
++++ b/feeds/packages/net/strongswan/Makefile
+@@ -539,6 +539,7 @@ endef
+ 
+ define Package/strongswan-ipsec/install
+ 	$(INSTALL_DIR) $(1)/etc/ $(1)/usr/sbin
++	$(CP) ./files/ipsec.conf $(PKG_INSTALL_DIR)/etc/
+ 	$(INSTALL_CONF) $(PKG_INSTALL_DIR)/etc/ipsec.conf $(1)/etc/
+ 	echo -e "\ninclude /var/ipsec/ipsec.conf" >> $(1)/etc/ipsec.conf
+ 	$(INSTALL_CONF) ./files/ipsec.secrets $(1)/etc/
+diff --git a/feeds/packages/net/strongswan/files/ipsec.conf b/feeds/packages/net/strongswan/files/ipsec.conf
+new file mode 100644
+index 0000000..a2f2319
+--- /dev/null
++++ b/feeds/packages/net/strongswan/files/ipsec.conf
+@@ -0,0 +1,29 @@
++# ipsec.conf - strongSwan IPsec configuration file
++
++# basic configuration
++
++config setup
++	# strictcrlpolicy=yes
++	# uniqueids = no
++
++# Add connections here.
++
++# Sample VPN connections
++
++#conn sample-self-signed
++#      leftsubnet=10.1.0.0/16
++#      leftcert=selfCert.der
++#      leftsendcert=never
++#      right=192.168.0.2
++#      rightsubnet=10.2.0.0/16
++#      rightcert=peerCert.der
++#      auto=start
++
++#conn sample-with-ca-cert
++#      leftsubnet=10.1.0.0/16
++#      leftcert=myCert.pem
++#      right=192.168.0.2
++#      rightsubnet=10.2.0.0/16
++#      rightid="C=CH, O=strongSwan Project CN=peer name"
++#      auto=start
++
+-- 
+2.38.1.windows.1
+

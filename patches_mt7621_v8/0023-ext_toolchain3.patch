@@ -1,0 +1,12 @@
+diff --git a/feeds/packages/net/xtables-addons/Makefile b/feeds/packages/net/xtables-addons/Makefile
+index cb678ac..5dbe091 100644
+--- a/feeds/packages/net/xtables-addons/Makefile
++++ b/feeds/packages/net/xtables-addons/Makefile
+@@ -48,6 +48,7 @@ MAKE_FLAGS:= \
+ 
+ MAKE_INSTALL_FLAGS:= \
+ 	$(patsubst ARCH=%,ARCH=$(LINUX_KARCH),$(MAKE_FLAGS)) \
++	DESTDIR="$(PKG_INSTALL_DIR)" \
+ 	DEPMOD="/bin/true"
+ else
+ define Build/Compile

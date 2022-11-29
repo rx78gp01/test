@@ -1,0 +1,80 @@
+From c20d7a7debf2187caa1ec792ece8411e9f3ad8e8 Mon Sep 17 00:00:00 2001
+From: Hauke Mehrtens <hauke@hauke-m.de>
+Date: Sun, 21 Apr 2024 17:46:55 +0200
+Subject: [PATCH] wolfssl: Update to 5.7.0
+
+This fixes multiple security problems:
+ * [High] CVE-2024-0901 Potential denial of service and out of bounds
+   read. Affects TLS 1.3 on the server side when accepting a connection
+   from a malicious TLS 1.3 client. If using TLS 1.3 on the server side
+   it is recommended to update the version of wolfSSL used.
+
+ * [Med] CVE-2024-1545 Fault Injection vulnerability in
+   RsaPrivateDecryption function that potentially allows an attacker
+   that has access to the same system with a victims process to perform
+   a Rowhammer fault injection. Thanks to Junkai Liang, Zhi Zhang, Xin
+   Zhang, Qingni Shen for the report (Peking University, The University
+   of Western Australia)."
+
+ * [Med] Fault injection attack with EdDSA signature operations. This
+   affects ed25519 sign operations where the system could be susceptible
+   to Rowhammer attacks. Thanks to Junkai Liang, Zhi Zhang, Xin Zhang,
+   Qingni Shen for the report (Peking University, The University of
+   Western Australia).
+
+Signed-off-by: Hauke Mehrtens <hauke@hauke-m.de>
+---
+ package/libs/wolfssl/Makefile                                 | 4 ++--
+ .../libs/wolfssl/patches/100-disable-hardening-check.patch    | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package/libs/wolfssl/Makefile b/package/libs/wolfssl/Makefile
+index 8477fb85c51d4..60ba85e15f443 100644
+--- a/package/libs/wolfssl/Makefile
++++ b/package/libs/wolfssl/Makefile
+@@ -8,12 +8,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=wolfssl
+-PKG_VERSION:=5.5.3-stable
++PKG_VERSION:=5.7.0-stable
+ PKG_RELEASE:=$(AUTORELEASE)
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://github.com/wolfSSL/wolfssl/archive/v$(PKG_VERSION)
+-PKG_HASH:=fd3135b8657d09fb96a8aad16585da850b96ea420ae8ce5ac4d5fdfc614c2683
++PKG_HASH:=2de93e8af588ee856fe67a6d7fce23fc1b226b74d710b0e3946bc8061f6aa18f
+ 
+ PKG_FIXUP:=libtool libtool-abiver
+ PKG_INSTALL:=1
+diff --git a/package/libs/wolfssl/patches/100-disable-hardening-check.patch b/package/libs/wolfssl/patches/100-disable-hardening-check.patch
+index 019645d79676c..680d3588a6462 100644
+--- a/package/libs/wolfssl/patches/100-disable-hardening-check.patch
++++ b/package/libs/wolfssl/patches/100-disable-hardening-check.patch
+@@ -1,10 +1,10 @@
+ --- a/wolfssl/wolfcrypt/settings.h
+ +++ b/wolfssl/wolfcrypt/settings.h
+-@@ -2455,7 +2455,7 @@ extern void uITRON4_free(void *p) ;
+- #endif
++@@ -2945,7 +2945,7 @@ extern void uITRON4_free(void *p) ;
+  
+  /* warning for not using harden build options (default with ./configure) */
+--#ifndef WC_NO_HARDEN
++ /* do not warn if big integer support is disabled */
++-#if !defined(WC_NO_HARDEN) && !defined(NO_BIG_INT)
+ +#if 0
+      #if (defined(USE_FAST_MATH) && !defined(TFM_TIMING_RESISTANT)) || \
+          (defined(HAVE_ECC) && !defined(ECC_TIMING_RESISTANT)) || \
+diff --git a/package/libs/wolfssl/Config.in b/package/libs/wolfssl/Config.in
+index a212d1fb8aa2c7..7c154ccb315020 100644
+--- a/package/libs/wolfssl/Config.in
++++ b/package/libs/wolfssl/Config.in
+@@ -69,7 +69,7 @@ if PACKAGE_libwolfssl
+ 		bool "AF_ALG"
+ 
+ 	config WOLFSSL_HAS_DEVCRYPTO_CBC
+-		bool "/dev/crytpo - AES-CBC-only"
++		bool "/dev/crypto - AES-CBC-only"
+ 		select WOLFSSL_HAS_DEVCRYPTO
+ 
+ 	config WOLFSSL_HAS_DEVCRYPTO_AES
