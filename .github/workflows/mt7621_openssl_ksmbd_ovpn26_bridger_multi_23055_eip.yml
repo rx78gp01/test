@@ -11,7 +11,7 @@ env:
   REPO_BRANCH_VER: 23.05.5
   REPO_TAG: v23.05.5
   KERNEL_VER: 5.15.175
-  END_TAG: _test
+  END_TAG: _eip
   ARCH_NAME: ramips
   CPU_NAME: mt7621
   DEVICE_NAME: linksys_ea8100-v1
@@ -20,10 +20,10 @@ env:
   ARCH_PACKAGES: mipsel_24kc
   REPO_DEPTH: 0
   FEEDS_CONF: feeds.conf.23055
-  CONFIG_FILE: config/.config_mt7621_openssl_ksmbd_ovpn26_bridger_multi_23055
+  CONFIG_FILE: config/.config_mt7621_openssl_ksmbd_ipsec_ovpn26_multi_23055
   FILES_PATH: files_mt7621
   PATCHES_ZIP0: patches_23055
-  PATCHES_PATH: patches_mt7621_23055
+  PATCHES_PATH: patches_mt7621_23055_eip
   UPLOAD_RELEASE: true
   TZ: UTC
   CACHE_DL: false
